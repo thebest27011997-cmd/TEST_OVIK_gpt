@@ -15,13 +15,28 @@ jobs:
       BUILDOZER_WARN_ON_ROOT: "0"
 
     steps:
+
+      # ==========================================================
+      # 1. REPOSITORY
+      # ==========================================================
+
       - name: Checkout repository
         uses: actions/checkout@v4
+
+
+      # ==========================================================
+      # 2. PYTHON
+      # ==========================================================
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
+
+      # ==========================================================
+      # 3. JAVA
+      # ==========================================================
 
       - name: Set up Java 17
         uses: actions/setup-java@v5
@@ -29,73 +44,112 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+
+      # ==========================================================
+      # 4. SYSTEM DEPENDENCIES
+      # ==========================================================
+
       - name: Install system dependencies
         run: |
           sudo apt-get update
+
           sudo apt-get install -y \
-            git zip unzip wget curl \
-            autoconf automake libtool libtool-bin \
-            pkg-config build-essential cmake ninja-build \
-            gettext autopoint \
-            libffi-dev libssl-dev zlib1g-dev \
-            libncurses5-dev libncursesw5-dev \
-            python3-dev ccache
+            git \
+            zip \
+            unzip \
+            wget \
+            curl \
+            autoconf \
+            automake \
+            libtool \
+            libtool-bin \
+            pkg-config \
+            build-essential \
+            cmake \
+            ninja-build \
+            gettext \
+            autopoint \
+            libffi-dev \
+            libssl-dev \
+            zlib1g-dev \
+            libncurses5-dev \
+            libncursesw5-dev \
+            python3-dev \
+            ccache
+
+
+      # ==========================================================
+      # 5. BUILDOZER
+      # ==========================================================
 
       - name: Install Buildozer
         run: |
           python -m pip install --upgrade pip
+
           python -m pip install \
             "setuptools<81" \
             wheel \
             "Cython==0.29.36" \
             "buildozer==1.5.0"
 
+          echo "================================"
+          echo "VERSIONS"
+          echo "================================"
+
           python --version
           java -version
           buildozer --version
           cython --version
 
-      # ----------------------------------------------------------
-      # FIX buildozer.spec
-      #
-      # ВАЖНО:
-      # настройки добавляются ВНУТРИ секции [app],
-      # а не после [buildozer].
-      # ----------------------------------------------------------
+
+      # ==========================================================
+      # 6. FIX PYTHON-FOR-ANDROID VERSION
+      # ==========================================================
+
       - name: Configure python-for-android
         run: |
           python - <<'PY'
           from pathlib import Path
 
           path = Path("buildozer.spec")
-          text = path.read_text(encoding="utf-8")
 
-          # Убираем параметры, если они остались от старых попыток.
-          lines = []
+          text = path.read_text(
+              encoding="utf-8"
+          )
+
+          new_lines = []
 
           for line in text.splitlines():
+
               stripped = line.strip()
 
-              if stripped.startswith("p4a.branch"):
+              if stripped.startswith(
+                  "p4a.branch"
+              ):
                   continue
 
-              if stripped.startswith("android.sdk_path"):
+              if stripped.startswith(
+                  "android.sdk_path"
+              ):
                   continue
 
-              if stripped.startswith("android.ndk_path"):
+              if stripped.startswith(
+                  "android.ndk_path"
+              ):
                   continue
 
-              lines.append(line)
+              new_lines.append(line)
 
-          text = "\n".join(lines) + "\n"
+          text = "\n".join(
+              new_lines
+          ) + "\n"
 
-          # Вставляем p4a.branch перед [buildozer],
-          # то есть параметр остаётся в [app].
           marker = "[buildozer]"
 
           if marker not in text:
               raise RuntimeError(
-                  "Section [buildozer] not found in buildozer.spec"
+                  "Section [buildozer] "
+                  "not found in buildozer.spec"
               )
 
           text = text.replace(
@@ -108,32 +162,117 @@ jobs:
               1,
           )
 
-          path.write_text(text, encoding="utf-8")
+          path.write_text(
+              text,
+              encoding="utf-8"
+          )
+
+          print(
+              "buildozer.spec updated"
+          )
           PY
 
           echo "================================"
-          echo "FINAL buildozer.spec"
+          echo "P4A CONFIGURATION"
           echo "================================"
 
-          cat buildozer.spec
+          grep -n \
+            "p4a.branch" \
+            buildozer.spec
 
-          echo "================================"
-          echo "CHECK P4A"
-          echo "================================"
 
-          grep -n "p4a.branch" buildozer.spec
-
-      # ----------------------------------------------------------
-      # Buildozer будет использовать этот SDK.
+      # ==========================================================
+      # 7. ANDROID SDK
       #
-      # Сам SDK он установит сам.
-      # Но лицензии создаём заранее именно в ЕГО каталоге.
-      # ----------------------------------------------------------
-      - name: Prepare Buildozer Android licenses
+      # Buildozer 1.5.0 expects:
+      #
+      # android-sdk/tools/bin/sdkmanager
+      #
+      # Modern Android SDK puts sdkmanager into:
+      #
+      # cmdline-tools/latest/bin
+      #
+      # Therefore we create both layouts.
+      # ==========================================================
+
+      - name: Prepare Android SDK
         run: |
+          set -euxo pipefail
+
           SDK_DIR="$HOME/.buildozer/android/platform/android-sdk"
 
-          mkdir -p "$SDK_DIR/licenses"
+          ZIP_FILE="$RUNNER_TEMP/android-command-line-tools.zip"
+
+          TEMP_DIR="$RUNNER_TEMP/android-command-line-tools"
+
+          echo "================================"
+          echo "PREPARING ANDROID SDK"
+          echo "================================"
+
+          rm -rf "$SDK_DIR"
+
+          rm -rf "$TEMP_DIR"
+
+          mkdir -p \
+            "$SDK_DIR/cmdline-tools"
+
+          mkdir -p \
+            "$SDK_DIR/licenses"
+
+          mkdir -p \
+            "$TEMP_DIR"
+
+
+          # ------------------------------------------------------
+          # Download Android Command Line Tools
+          # ------------------------------------------------------
+
+          wget -q \
+            https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip \
+            -O "$ZIP_FILE"
+
+
+          # ------------------------------------------------------
+          # Extract
+          # ------------------------------------------------------
+
+          unzip -q \
+            "$ZIP_FILE" \
+            -d "$TEMP_DIR"
+
+
+          # ------------------------------------------------------
+          # Modern SDK layout
+          # ------------------------------------------------------
+
+          mv \
+            "$TEMP_DIR/cmdline-tools" \
+            "$SDK_DIR/cmdline-tools/latest"
+
+
+          # ------------------------------------------------------
+          # Buildozer 1.5 compatibility layout
+          # ------------------------------------------------------
+
+          mkdir -p \
+            "$SDK_DIR/tools"
+
+          ln -s \
+            "$SDK_DIR/cmdline-tools/latest/bin" \
+            "$SDK_DIR/tools/bin"
+
+          ln -s \
+            "$SDK_DIR/cmdline-tools/latest/lib" \
+            "$SDK_DIR/tools/lib"
+
+          ln -s \
+            "$SDK_DIR/cmdline-tools/latest/source.properties" \
+            "$SDK_DIR/tools/source.properties"
+
+
+          # ------------------------------------------------------
+          # Android licenses
+          # ------------------------------------------------------
 
           echo \
             "8933bad161af4178b1185d1a37fbf41ea5269c55" \
@@ -147,71 +286,205 @@ jobs:
             "24333f8a63b6825ea9c5514f83c2829b004d1fee" \
             > "$SDK_DIR/licenses/android-sdk-preview-license"
 
+
+          # ------------------------------------------------------
+          # Verify sdkmanager BEFORE Buildozer
+          # ------------------------------------------------------
+
           echo "================================"
-          echo "BUILDOZER LICENSES"
+          echo "SDKMANAGER CHECK"
           echo "================================"
 
-          ls -la "$SDK_DIR/licenses"
+          test -x \
+            "$SDK_DIR/tools/bin/sdkmanager"
 
-          cat "$SDK_DIR/licenses/android-sdk-license"
+          test -x \
+            "$SDK_DIR/cmdline-tools/latest/bin/sdkmanager"
 
-      # ----------------------------------------------------------
-      # Чистим только проектный build.
-      # Глобальную папку с лицензиями НЕ удаляем.
-      # ----------------------------------------------------------
-      - name: Clean previous build
+          "$SDK_DIR/tools/bin/sdkmanager" \
+            --version
+
+
+          # ------------------------------------------------------
+          # Accept licenses
+          # ------------------------------------------------------
+
+          yes | \
+            "$SDK_DIR/tools/bin/sdkmanager" \
+            --sdk_root="$SDK_DIR" \
+            --licenses \
+            >/dev/null || true
+
+
+          # ------------------------------------------------------
+          # Install required Android packages
+          # ------------------------------------------------------
+
+          "$SDK_DIR/tools/bin/sdkmanager" \
+            --sdk_root="$SDK_DIR" \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
+
+
+          echo "================================"
+          echo "VERIFY ANDROID PACKAGES"
+          echo "================================"
+
+          test -f \
+            "$SDK_DIR/platforms/android-35/android.jar"
+
+          test -x \
+            "$SDK_DIR/build-tools/35.0.0/aidl"
+
+          test -x \
+            "$SDK_DIR/platform-tools/adb"
+
+          test -d \
+            "$SDK_DIR/licenses"
+
+          echo "ANDROID SDK CHECK PASSED"
+
+
+      # ==========================================================
+      # 8. CLEAN PROJECT BUILD
+      #
+      # IMPORTANT:
+      # We remove only project .buildozer.
+      # Global SDK must remain.
+      # ==========================================================
+
+      - name: Clean previous project build
         run: |
           rm -rf .buildozer
+
           rm -rf bin
 
           mkdir -p bin
 
-          echo "CLEAN BUILD READY"
+          echo "PROJECT BUILD CLEANED"
+
+
+      # ==========================================================
+      # 9. VERIFY APPLICATION
+      # ==========================================================
 
       - name: Verify application files
         run: |
+          echo "================================"
+          echo "APPLICATION FILE CHECK"
+          echo "================================"
+
           test -f main.py
+
           test -f testov.kv
+
           test -f buildozer.spec
+
           test -f assets/icon.png
+
           test -d data
+
           test -d fonts
 
           echo "APPLICATION FILES OK"
 
-      # ----------------------------------------------------------
-      # BUILD
-      # ----------------------------------------------------------
+
+      # ==========================================================
+      # 10. FINAL SDK CHECK
+      # ==========================================================
+
+      - name: Final Android environment check
+        run: |
+          SDK_DIR="$HOME/.buildozer/android/platform/android-sdk"
+
+          echo "================================"
+          echo "FINAL ANDROID CHECK"
+          echo "================================"
+
+          echo "SDK:"
+          echo "$SDK_DIR"
+
+          echo ""
+          echo "sdkmanager:"
+
+          ls -la \
+            "$SDK_DIR/tools/bin/sdkmanager"
+
+          echo ""
+          echo "Android API 35:"
+
+          ls -la \
+            "$SDK_DIR/platforms/android-35/android.jar"
+
+          echo ""
+          echo "AIDL:"
+
+          ls -la \
+            "$SDK_DIR/build-tools/35.0.0/aidl"
+
+          echo ""
+          echo "Licenses:"
+
+          ls -la \
+            "$SDK_DIR/licenses"
+
+          echo ""
+          echo "p4a configuration:"
+
+          grep -n \
+            "p4a.branch" \
+            buildozer.spec
+
+          echo ""
+          echo "ENVIRONMENT CHECK PASSED"
+
+
+      # ==========================================================
+      # 11. BUILD APK
+      # ==========================================================
+
       - name: Build APK
         run: |
           set -o pipefail
 
           echo "================================"
-          echo "STARTING APK BUILD"
+          echo "STARTING TEST_OV APK BUILD"
           echo "================================"
 
-          buildozer -v android debug 2>&1 | tee build.log
+          buildozer \
+            -v \
+            android \
+            debug \
+            2>&1 | tee build.log
 
-      # ----------------------------------------------------------
-      # Всегда сохраняем лог
-      # ----------------------------------------------------------
+
+      # ==========================================================
+      # 12. SAVE BUILD LOG
+      # ==========================================================
+
       - name: Upload build log
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: build-log
+
           path: build.log
+
           if-no-files-found: ignore
+
           retention-days: 7
 
-      # ----------------------------------------------------------
-      # Ищем APK даже после ошибки
-      # ----------------------------------------------------------
+
+      # ==========================================================
+      # 13. SEARCH APK
+      # ==========================================================
+
       - name: Search for APK
         if: always()
         run: |
           echo "================================"
-          echo "APK SEARCH"
+          echo "SEARCHING FOR APK"
           echo "================================"
 
           find . \
@@ -220,9 +493,11 @@ jobs:
             -print \
             2>/dev/null || true
 
-      # ----------------------------------------------------------
-      # Проверка результата
-      # ----------------------------------------------------------
+
+      # ==========================================================
+      # 14. VERIFY APK
+      # ==========================================================
+
       - name: Verify APK
         if: success()
         run: |
@@ -234,27 +509,38 @@ jobs:
               | wc -l
           )
 
-          echo "APK files found: $APK_COUNT"
+          echo \
+            "APK files found: $APK_COUNT"
 
           if [ "$APK_COUNT" -lt 1 ]; then
-            echo "ERROR: APK NOT FOUND"
+
+            echo \
+              "ERROR: APK NOT FOUND"
+
             exit 1
+
           fi
 
           echo "================================"
           echo "APK SUCCESSFULLY CREATED"
           echo "================================"
 
-          ls -lh bin/*.apk
+          ls -lh \
+            bin/*.apk
 
-      # ----------------------------------------------------------
-      # Готовый APK
-      # ----------------------------------------------------------
+
+      # ==========================================================
+      # 15. UPLOAD APK
+      # ==========================================================
+
       - name: Upload APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: Test_OV-APK
+
           path: bin/*.apk
+
           if-no-files-found: error
+
           retention-days: 14
