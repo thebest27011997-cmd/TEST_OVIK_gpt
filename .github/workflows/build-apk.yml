@@ -486,7 +486,6 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-
       # ============================================================
       # 13. SEARCH FOR APK
       # ============================================================
@@ -535,13 +534,47 @@ jobs:
 
 
       # ============================================================
-      # 15. UPLOAD APK
+      # 15. RENAME APK
+      # ============================================================
+
+      - name: Rename APK
+        run: |
+          echo "================================"
+          echo "RENAMING APK"
+          echo "================================"
+
+          APK_FILE=$(find bin -maxdepth 1 -type f -name "*.apk" | head -n 1)
+
+          if [ -z "$APK_FILE" ]; then
+            echo "ERROR: APK FILE NOT FOUND"
+            exit 1
+          fi
+
+          NEW_APK="bin/TEST_OVIK_${{ github.run_number }}.apk"
+
+          mv "$APK_FILE" "$NEW_APK"
+
+          echo "Original APK:"
+          echo "$APK_FILE"
+
+          echo "New APK:"
+          echo "$NEW_APK"
+
+          test -f "$NEW_APK"
+
+          echo "================================"
+          echo "APK RENAME SUCCESS"
+          echo "================================"
+
+
+      # ============================================================
+      # 16. UPLOAD APK
       # ============================================================
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: android-debug-apk
-          path: bin/*.apk
+          name: TEST_OVIK_${{ github.run_number }}
+          path: bin/TEST_OVIK_${{ github.run_number }}.apk
           if-no-files-found: error
           retention-days: 14
