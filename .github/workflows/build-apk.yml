@@ -51,181 +51,150 @@ jobs:
             "buildozer==1.5.0"
 
           python --version
+          java -version
           buildozer --version
           cython --version
 
-      # ---------------------------------------------------------
-      # Android SDK
-      # ---------------------------------------------------------
-      - name: Install Android SDK
-        run: |
-          export ANDROID_SDK_ROOT="$HOME/android-sdk"
-
-          mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
-
-          wget -q \
-            https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip \
-            -O /tmp/cmdline-tools.zip
-
-          rm -rf /tmp/android-commandline
-          mkdir -p /tmp/android-commandline
-
-          unzip -q \
-            /tmp/cmdline-tools.zip \
-            -d /tmp/android-commandline
-
-          mkdir -p \
-            "$ANDROID_SDK_ROOT/cmdline-tools/latest"
-
-          cp -R \
-            /tmp/android-commandline/cmdline-tools/. \
-            "$ANDROID_SDK_ROOT/cmdline-tools/latest/"
-
-          echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
-
-          echo \
-            "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" \
-            >> "$GITHUB_PATH"
-
-          echo \
-            "$ANDROID_SDK_ROOT/platform-tools" \
-            >> "$GITHUB_PATH"
-
-          echo \
-            "$ANDROID_SDK_ROOT/build-tools/35.0.0" \
-            >> "$GITHUB_PATH"
-
-      - name: Install Android SDK packages
-        run: |
-          yes | sdkmanager --licenses >/dev/null || true
-
-          sdkmanager \
-            "platform-tools" \
-            "platforms;android-35" \
-            "build-tools;35.0.0"
-
-          test -f \
-            "$ANDROID_SDK_ROOT/platforms/android-35/android.jar"
-
-          test -x \
-            "$ANDROID_SDK_ROOT/build-tools/35.0.0/aidl"
-
-          echo "ANDROID SDK OK"
-
-      # ---------------------------------------------------------
-      # Android NDK r25b
-      # ---------------------------------------------------------
-      - name: Install Android NDK r25b
-        run: |
-          wget -q \
-            https://dl.google.com/android/repository/android-ndk-r25b-linux.zip \
-            -O /tmp/android-ndk.zip
-
-          rm -rf "$HOME/android-ndk-r25b"
-
-          unzip -q \
-            /tmp/android-ndk.zip \
-            -d "$HOME"
-
-          echo \
-            "ANDROID_NDK_HOME=$HOME/android-ndk-r25b" \
-            >> "$GITHUB_ENV"
-
-          echo \
-            "ANDROID_NDK_ROOT=$HOME/android-ndk-r25b" \
-            >> "$GITHUB_ENV"
-
-          test -f \
-            "$HOME/android-ndk-r25b/source.properties"
-
-          echo "ANDROID NDK r25b OK"
-
-      # ---------------------------------------------------------
-      # IMPORTANT
+      # ----------------------------------------------------------
+      # FIX buildozer.spec
       #
-      # Не создаём symlink python-for-android.
-      # Buildozer сам клонирует нужную ветку.
-      # ---------------------------------------------------------
-      - name: Configure fixed python-for-android
+      # ВАЖНО:
+      # настройки добавляются ВНУТРИ секции [app],
+      # а не после [buildozer].
+      # ----------------------------------------------------------
+      - name: Configure python-for-android
         run: |
-          cat >> buildozer.spec <<'EOF'
+          python - <<'PY'
+          from pathlib import Path
 
-          # Fixed python-for-android release
-          p4a.branch = v2024.01.21
-          android.ndk_path = /home/runner/android-ndk-r25b
-          android.sdk_path = /home/runner/android-sdk
-          EOF
+          path = Path("buildozer.spec")
+          text = path.read_text(encoding="utf-8")
 
-          echo "=============================="
-          echo "FINAL BUILDOZER CONFIGURATION"
-          echo "=============================="
+          # Убираем параметры, если они остались от старых попыток.
+          lines = []
+
+          for line in text.splitlines():
+              stripped = line.strip()
+
+              if stripped.startswith("p4a.branch"):
+                  continue
+
+              if stripped.startswith("android.sdk_path"):
+                  continue
+
+              if stripped.startswith("android.ndk_path"):
+                  continue
+
+              lines.append(line)
+
+          text = "\n".join(lines) + "\n"
+
+          # Вставляем p4a.branch перед [buildozer],
+          # то есть параметр остаётся в [app].
+          marker = "[buildozer]"
+
+          if marker not in text:
+              raise RuntimeError(
+                  "Section [buildozer] not found in buildozer.spec"
+              )
+
+          text = text.replace(
+              marker,
+              "\n"
+              "# Fixed python-for-android version\n"
+              "p4a.branch = v2024.01.21\n"
+              "\n"
+              + marker,
+              1,
+          )
+
+          path.write_text(text, encoding="utf-8")
+          PY
+
+          echo "================================"
+          echo "FINAL buildozer.spec"
+          echo "================================"
 
           cat buildozer.spec
 
-      # ---------------------------------------------------------
-      # Clean build
-      # ---------------------------------------------------------
-      - name: Clean Buildozer directories
+          echo "================================"
+          echo "CHECK P4A"
+          echo "================================"
+
+          grep -n "p4a.branch" buildozer.spec
+
+      # ----------------------------------------------------------
+      # Buildozer будет использовать этот SDK.
+      #
+      # Сам SDK он установит сам.
+      # Но лицензии создаём заранее именно в ЕГО каталоге.
+      # ----------------------------------------------------------
+      - name: Prepare Buildozer Android licenses
+        run: |
+          SDK_DIR="$HOME/.buildozer/android/platform/android-sdk"
+
+          mkdir -p "$SDK_DIR/licenses"
+
+          echo \
+            "8933bad161af4178b1185d1a37fbf41ea5269c55" \
+            > "$SDK_DIR/licenses/android-sdk-license"
+
+          echo \
+            "d56f5187479451eabf01fb78af6dfcb131a6481e" \
+            >> "$SDK_DIR/licenses/android-sdk-license"
+
+          echo \
+            "24333f8a63b6825ea9c5514f83c2829b004d1fee" \
+            > "$SDK_DIR/licenses/android-sdk-preview-license"
+
+          echo "================================"
+          echo "BUILDOZER LICENSES"
+          echo "================================"
+
+          ls -la "$SDK_DIR/licenses"
+
+          cat "$SDK_DIR/licenses/android-sdk-license"
+
+      # ----------------------------------------------------------
+      # Чистим только проектный build.
+      # Глобальную папку с лицензиями НЕ удаляем.
+      # ----------------------------------------------------------
+      - name: Clean previous build
         run: |
           rm -rf .buildozer
           rm -rf bin
-
-          # На всякий случай убираем глобальный p4a предыдущих запусков.
-          rm -rf "$HOME/.buildozer/android/platform/python-for-android"
 
           mkdir -p bin
 
           echo "CLEAN BUILD READY"
 
-      # ---------------------------------------------------------
-      # Environment check
-      # ---------------------------------------------------------
-      - name: Verify build environment
+      - name: Verify application files
         run: |
-          echo "Python:"
-          python --version
+          test -f main.py
+          test -f testov.kv
+          test -f buildozer.spec
+          test -f assets/icon.png
+          test -d data
+          test -d fonts
 
-          echo "Java:"
-          java -version
+          echo "APPLICATION FILES OK"
 
-          echo "Buildozer:"
-          buildozer --version
-
-          echo "Cython:"
-          cython --version
-
-          echo "SDK:"
-          echo "$ANDROID_SDK_ROOT"
-
-          echo "NDK:"
-          echo "$ANDROID_NDK_HOME"
-
-          test -d "$ANDROID_SDK_ROOT"
-          test -d "$ANDROID_NDK_HOME"
-
-          echo "BUILD ENVIRONMENT OK"
-
-      # ---------------------------------------------------------
-      # Build
-      # ---------------------------------------------------------
+      # ----------------------------------------------------------
+      # BUILD
+      # ----------------------------------------------------------
       - name: Build APK
         run: |
           set -o pipefail
 
-          echo "=============================="
-          echo "START APK BUILD"
-          echo "=============================="
+          echo "================================"
+          echo "STARTING APK BUILD"
+          echo "================================"
 
-          buildozer \
-            -v \
-            android \
-            debug \
-            2>&1 | tee build.log
+          buildozer -v android debug 2>&1 | tee build.log
 
-      # ---------------------------------------------------------
-      # Diagnostics
-      # ---------------------------------------------------------
+      # ----------------------------------------------------------
+      # Всегда сохраняем лог
+      # ----------------------------------------------------------
       - name: Upload build log
         if: always()
         uses: actions/upload-artifact@v4
@@ -235,12 +204,15 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      # ----------------------------------------------------------
+      # Ищем APK даже после ошибки
+      # ----------------------------------------------------------
       - name: Search for APK
         if: always()
         run: |
-          echo "=============================="
+          echo "================================"
           echo "APK SEARCH"
-          echo "=============================="
+          echo "================================"
 
           find . \
             -type f \
@@ -248,9 +220,9 @@ jobs:
             -print \
             2>/dev/null || true
 
-      # ---------------------------------------------------------
-      # APK verification
-      # ---------------------------------------------------------
+      # ----------------------------------------------------------
+      # Проверка результата
+      # ----------------------------------------------------------
       - name: Verify APK
         if: success()
         run: |
@@ -264,20 +236,20 @@ jobs:
 
           echo "APK files found: $APK_COUNT"
 
-          if [ "$APK_COUNT" -eq 0 ]; then
-            echo "ERROR: APK not found"
+          if [ "$APK_COUNT" -lt 1 ]; then
+            echo "ERROR: APK NOT FOUND"
             exit 1
           fi
 
-          echo "=============================="
+          echo "================================"
           echo "APK SUCCESSFULLY CREATED"
-          echo "=============================="
+          echo "================================"
 
           ls -lh bin/*.apk
 
-      # ---------------------------------------------------------
-      # Upload APK
-      # ---------------------------------------------------------
+      # ----------------------------------------------------------
+      # Готовый APK
+      # ----------------------------------------------------------
       - name: Upload APK
         if: success()
         uses: actions/upload-artifact@v4
