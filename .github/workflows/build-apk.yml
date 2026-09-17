@@ -1,0 +1,37 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - '**.md'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build debug APK with Buildozer
+        uses: ArtemSBulgakov/buildozer-action@v1
+        id: buildozer
+        with:
+          command: buildozer android debug
+          buildozer_version: stable
+
+      - name: Show generated APK files
+        run: find bin -maxdepth 1 -type f -name '*.apk' -print || true
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Test_OV-apk
+          path: bin/*.apk
+          if-no-files-found: error
