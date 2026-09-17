@@ -136,7 +136,7 @@ ScreenManager:
 
         BoxLayout:
             size_hint_y: None
-            height: dp(44)
+            height: dp(48)
             spacing: dp(8)
 
             Label:
@@ -181,7 +181,7 @@ ScreenManager:
                     orientation: 'vertical'
                     size_hint_y: None
                     height: self.minimum_height
-                    spacing: dp(8)
+                    spacing: dp(10)
 
                 Label:
                     text: root.message
@@ -189,7 +189,7 @@ ScreenManager:
                     font_size: '15sp'
                     text_size: self.width, None
                     size_hint_y: None
-                    height: dp(36) if root.message else 0
+                    height: dp(40) if root.message else 0
                     halign: 'center'
                     valign: 'middle'
 
@@ -206,29 +206,41 @@ ScreenManager:
         Button:
             text: 'Завершить тестирование'
             color: 0, 0, 0, 1
+            font_size: '16sp'
             background_normal: ''
+            background_down: ''
             background_color: .88, .75, .65, 1
             size_hint_y: None
-            height: dp(46)
+            height: dp(52)
             on_release: root.finish()
 
         BoxLayout:
             size_hint_y: None
-            height: dp(58)
+            height: dp(64)
             spacing: dp(8)
 
             Button:
-                text: 'Предыдущий вопрос'
+                text: 'Предыдущий\nвопрос'
                 color: 0, 0, 0, 1
+                font_size: '15sp'
+                halign: 'center'
+                valign: 'middle'
+                text_size: self.size
                 background_normal: ''
-                background_color: .84, .84, .84, 1
+                background_down: ''
+                background_color: .78, .78, .78, 1
                 disabled: root.idx <= 0
                 on_release: root.prev()
 
             Button:
                 text: 'Ответ'
                 color: 0, 0, 0, 1
+                font_size: '15sp'
+                halign: 'center'
+                valign: 'middle'
+                text_size: self.size
                 background_normal: ''
+                background_down: ''
                 background_color: .82, .78, .68, 1
                 opacity: 1 if app.mode == 'обучение' else 0
                 disabled: app.mode != 'обучение'
@@ -237,10 +249,15 @@ ScreenManager:
                 on_release: root.show_correct()
 
             Button:
-                text: 'Следующий вопрос'
+                text: 'Следующий\nвопрос'
                 color: 0, 0, 0, 1
+                font_size: '15sp'
+                halign: 'center'
+                valign: 'middle'
+                text_size: self.size
                 background_normal: ''
-                background_color: .84, .84, .84, 1
+                background_down: ''
+                background_color: .78, .78, .78, 1
                 on_release: root.next()
 
 
@@ -273,6 +290,7 @@ ScreenManager:
             text: 'На главный экран'
             color: 0, 0, 0, 1
             background_normal: ''
+            background_down: ''
             background_color: .84, .77, .64, 1
             size_hint_y: None
             height: dp(56)
@@ -322,7 +340,9 @@ ScreenManager:
         Button:
             text: 'Назад'
             color: 0, 0, 0, 1
+            font_size: '16sp'
             background_normal: ''
+            background_down: ''
             background_color: .84, .77, .64, 1
             size_hint_y: None
             height: dp(56)
