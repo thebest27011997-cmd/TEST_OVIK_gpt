@@ -3,24 +3,21 @@
 
 <Label>:
     font_name: 'AppArial'
-    italic: False
 
 
 <Button>:
     font_name: 'AppArial'
-    italic: False
 
 
 <ToggleButton>:
     font_name: 'AppArial'
-    italic: False
 
 
 ScreenManager:
     Login:
     Test:
     Result:
-    Settings:
+    AdminSettings:
 
 
 <Login>:
@@ -160,6 +157,7 @@ ScreenManager:
 
         ScrollView:
             do_scroll_x: False
+            do_scroll_y: True
 
             BoxLayout:
                 orientation: 'vertical'
@@ -235,7 +233,7 @@ ScreenManager:
                 opacity: 1 if app.mode == 'обучение' else 0
                 disabled: app.mode != 'обучение'
                 size_hint_x: 1 if app.mode == 'обучение' else 0
-                width: self.minimum_width if app.mode == 'обучение' else 0
+                width: dp(100) if app.mode == 'обучение' else 0
                 on_release: root.show_correct()
 
             Button:
@@ -283,7 +281,7 @@ ScreenManager:
         Widget:
 
 
-<Settings>:
+<AdminSettings>:
     name: 'settings'
 
     canvas.before:
