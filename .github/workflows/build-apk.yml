@@ -9,97 +9,109 @@ on:
 jobs:
   build:
     runs-on: ubuntu-22.04
+    timeout-minutes: 90
+
+    env:
+      BUILDOZER_WARN_ON_ROOT: "0"
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
       - name: Set up Java 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
-          distribution: "temurin"
+          distribution: temurin
           java-version: "17"
 
-      # ---------------------------------------------------------
-      # Linux dependencies
-      # ---------------------------------------------------------
       - name: Install system dependencies
         run: |
           sudo apt-get update
-
           sudo apt-get install -y \
-            git \
-            zip \
-            unzip \
-            autoconf \
-            automake \
-            libtool \
-            libtool-bin \
-            pkg-config \
-            build-essential \
-            cmake \
-            ninja-build \
-            gettext \
-            autopoint \
-            libffi-dev \
-            libssl-dev \
-            zlib1g-dev \
-            python3-dev
+            git zip unzip wget curl \
+            autoconf automake libtool libtool-bin \
+            pkg-config build-essential cmake ninja-build \
+            gettext autopoint \
+            libffi-dev libssl-dev zlib1g-dev \
+            libncurses5-dev libncursesw5-dev \
+            python3-dev ccache
 
-      # ---------------------------------------------------------
-      # Python dependencies
-      # ---------------------------------------------------------
-      - name: Install Buildozer and Python dependencies
+      - name: Install Buildozer
         run: |
-          python -m pip install --upgrade pip setuptools wheel
-
+          python -m pip install --upgrade pip
           python -m pip install \
+            "setuptools<81" \
+            wheel \
             "Cython==0.29.36" \
             "buildozer==1.5.0"
 
+          python --version
           buildozer --version
           cython --version
 
       # ---------------------------------------------------------
       # Android SDK
       # ---------------------------------------------------------
-      - name: Install Android SDK command line tools
+      - name: Install Android SDK
         run: |
-          mkdir -p "$HOME/android-sdk/cmdline-tools"
+          export ANDROID_SDK_ROOT="$HOME/android-sdk"
+
+          mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
 
           wget -q \
             https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip \
             -O /tmp/cmdline-tools.zip
 
-          unzip -q /tmp/cmdline-tools.zip -d /tmp/android-cmdline-tools
+          rm -rf /tmp/android-commandline
+          mkdir -p /tmp/android-commandline
 
-          mkdir -p "$HOME/android-sdk/cmdline-tools/latest"
+          unzip -q \
+            /tmp/cmdline-tools.zip \
+            -d /tmp/android-commandline
 
-          mv /tmp/android-cmdline-tools/cmdline-tools/* \
-            "$HOME/android-sdk/cmdline-tools/latest/"
+          mkdir -p \
+            "$ANDROID_SDK_ROOT/cmdline-tools/latest"
 
-          echo "ANDROID_HOME=$HOME/android-sdk" >> "$GITHUB_ENV"
-          echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> "$GITHUB_ENV"
+          cp -R \
+            /tmp/android-commandline/cmdline-tools/. \
+            "$ANDROID_SDK_ROOT/cmdline-tools/latest/"
 
-          echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
-          echo "$HOME/android-sdk/platform-tools" >> "$GITHUB_PATH"
+          echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
 
-      # ---------------------------------------------------------
-      # Android SDK packages
-      # ---------------------------------------------------------
+          echo \
+            "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" \
+            >> "$GITHUB_PATH"
+
+          echo \
+            "$ANDROID_SDK_ROOT/platform-tools" \
+            >> "$GITHUB_PATH"
+
+          echo \
+            "$ANDROID_SDK_ROOT/build-tools/35.0.0" \
+            >> "$GITHUB_PATH"
+
       - name: Install Android SDK packages
         run: |
-          yes | sdkmanager --licenses || true
+          yes | sdkmanager --licenses >/dev/null || true
 
           sdkmanager \
             "platform-tools" \
             "platforms;android-35" \
             "build-tools;35.0.0"
+
+          test -f \
+            "$ANDROID_SDK_ROOT/platforms/android-35/android.jar"
+
+          test -x \
+            "$ANDROID_SDK_ROOT/build-tools/35.0.0/aidl"
+
+          echo "ANDROID SDK OK"
 
       # ---------------------------------------------------------
       # Android NDK r25b
@@ -110,65 +122,66 @@ jobs:
             https://dl.google.com/android/repository/android-ndk-r25b-linux.zip \
             -O /tmp/android-ndk.zip
 
-          unzip -q /tmp/android-ndk.zip -d "$HOME"
+          rm -rf "$HOME/android-ndk-r25b"
 
-          echo "ANDROID_NDK_HOME=$HOME/android-ndk-r25b" >> "$GITHUB_ENV"
-          echo "ANDROID_NDK_ROOT=$HOME/android-ndk-r25b" >> "$GITHUB_ENV"
+          unzip -q \
+            /tmp/android-ndk.zip \
+            -d "$HOME"
 
-          echo "Installed NDK:"
-          ls "$HOME/android-ndk-r25b"
+          echo \
+            "ANDROID_NDK_HOME=$HOME/android-ndk-r25b" \
+            >> "$GITHUB_ENV"
+
+          echo \
+            "ANDROID_NDK_ROOT=$HOME/android-ndk-r25b" \
+            >> "$GITHUB_ENV"
+
+          test -f \
+            "$HOME/android-ndk-r25b/source.properties"
+
+          echo "ANDROID NDK r25b OK"
 
       # ---------------------------------------------------------
-      # Fixed python-for-android
+      # IMPORTANT
       #
-      # IMPORTANT:
-      # We don't allow Buildozer to download a floating master.
+      # Не создаём symlink python-for-android.
+      # Buildozer сам клонирует нужную ветку.
       # ---------------------------------------------------------
-      - name: Install fixed python-for-android
+      - name: Configure fixed python-for-android
         run: |
-          rm -rf "$HOME/python-for-android"
+          cat >> buildozer.spec <<'EOF'
 
-          git clone \
-            --branch v2024.01.21 \
-            --depth 1 \
-            https://github.com/kivy/python-for-android.git \
-            "$HOME/python-for-android"
+          # Fixed python-for-android release
+          p4a.branch = v2024.01.21
+          android.ndk_path = /home/runner/android-ndk-r25b
+          android.sdk_path = /home/runner/android-sdk
+          EOF
 
-          cd "$HOME/python-for-android"
+          echo "=============================="
+          echo "FINAL BUILDOZER CONFIGURATION"
+          echo "=============================="
 
-          python -m pip install .
-
-          echo "P4A_DIR=$HOME/python-for-android" >> "$GITHUB_ENV"
-
-          echo "python-for-android commit:"
-          git rev-parse HEAD
-
-      # ---------------------------------------------------------
-      # Check buildozer.spec
-      # ---------------------------------------------------------
-      - name: Show Buildozer configuration
-        run: |
-          echo "===== buildozer.spec ====="
           cat buildozer.spec
-          echo "=========================="
 
       # ---------------------------------------------------------
-      # Clean previous Android build
+      # Clean build
       # ---------------------------------------------------------
-      - name: Clean old build
+      - name: Clean Buildozer directories
         run: |
           rm -rf .buildozer
           rm -rf bin
 
-          mkdir -p .buildozer/android/platform
+          # На всякий случай убираем глобальный p4a предыдущих запусков.
+          rm -rf "$HOME/.buildozer/android/platform/python-for-android"
 
-          ln -s "$HOME/python-for-android" \
-            .buildozer/android/platform/python-for-android
+          mkdir -p bin
+
+          echo "CLEAN BUILD READY"
 
       # ---------------------------------------------------------
-      # Diagnostic information
+      # Environment check
       # ---------------------------------------------------------
-      - name: Show environment
+      - name: Verify build environment
         run: |
           echo "Python:"
           python --version
@@ -183,36 +196,35 @@ jobs:
           cython --version
 
           echo "SDK:"
-          echo "$ANDROID_HOME"
+          echo "$ANDROID_SDK_ROOT"
 
           echo "NDK:"
           echo "$ANDROID_NDK_HOME"
 
-          echo "P4A:"
-          echo "$P4A_DIR"
+          test -d "$ANDROID_SDK_ROOT"
+          test -d "$ANDROID_NDK_HOME"
 
-          echo "SDK packages:"
-          sdkmanager --list_installed
+          echo "BUILD ENVIRONMENT OK"
 
       # ---------------------------------------------------------
-      # Build APK
+      # Build
       # ---------------------------------------------------------
       - name: Build APK
-        env:
-          ANDROID_HOME: ${{ env.ANDROID_HOME }}
-          ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
-          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
-          ANDROID_NDK_ROOT: ${{ env.ANDROID_NDK_ROOT }}
-
-          BUILDOZER_WARN_ON_ROOT: "0"
-
         run: |
           set -o pipefail
 
-          buildozer -v android debug 2>&1 | tee build.log
+          echo "=============================="
+          echo "START APK BUILD"
+          echo "=============================="
+
+          buildozer \
+            -v \
+            android \
+            debug \
+            2>&1 | tee build.log
 
       # ---------------------------------------------------------
-      # Upload log even when build fails
+      # Diagnostics
       # ---------------------------------------------------------
       - name: Upload build log
         if: always()
@@ -221,6 +233,47 @@ jobs:
           name: build-log
           path: build.log
           if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Search for APK
+        if: always()
+        run: |
+          echo "=============================="
+          echo "APK SEARCH"
+          echo "=============================="
+
+          find . \
+            -type f \
+            -name "*.apk" \
+            -print \
+            2>/dev/null || true
+
+      # ---------------------------------------------------------
+      # APK verification
+      # ---------------------------------------------------------
+      - name: Verify APK
+        if: success()
+        run: |
+          APK_COUNT=$(
+            find bin \
+              -maxdepth 1 \
+              -type f \
+              -name "*.apk" \
+              | wc -l
+          )
+
+          echo "APK files found: $APK_COUNT"
+
+          if [ "$APK_COUNT" -eq 0 ]; then
+            echo "ERROR: APK not found"
+            exit 1
+          fi
+
+          echo "=============================="
+          echo "APK SUCCESSFULLY CREATED"
+          echo "=============================="
+
+          ls -lh bin/*.apk
 
       # ---------------------------------------------------------
       # Upload APK
@@ -229,6 +282,7 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: android-apk
+          name: Test_OV-APK
           path: bin/*.apk
           if-no-files-found: error
+          retention-days: 14
