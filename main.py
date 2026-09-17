@@ -1,19 +1,28 @@
 import json
 import random
+import re
 from pathlib import Path
 
 from kivy.app import App
-from kivy.lang import Builder
-from kivy.properties import StringProperty, NumericProperty
-from kivy.uix.screenmanager import Screen
 from kivy.clock import Clock
 from kivy.core.text import LabelBase
+from kivy.core.window import Window
+from kivy.lang import Builder
+from kivy.metrics import dp
+from kivy.properties import BooleanProperty, NumericProperty, StringProperty
 from kivy.resources import resource_add_path
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.button import Button
+from kivy.uix.checkbox import CheckBox
+from kivy.uix.label import Label
+from kivy.uix.screenmanager import Screen
+from kivy.uix.textinput import TextInput
+from kivy.uix.togglebutton import ToggleButton
 
 
-# ---------------------------------------------------------
-# Пути и основные настройки приложения
-# ---------------------------------------------------------
+# =========================================================
+# ОСНОВНЫЕ НАСТРОЙКИ
+# =========================================================
 
 BASE = Path(__file__).resolve().parent
 
@@ -23,16 +32,18 @@ FONT_PATH = BASE / "fonts" / "Arial.ttf"
 DATA_PATH = BASE / "data" / "questions.json"
 KV_PATH = BASE / "testov.kv"
 
-APP_NAME = "Тест_ОВ"
+APP_NAME = "ТехПрофи"
 
 DEFAULT_NUM = 25
 DEFAULT_MINUTES = 15
 DEFAULT_PASS = 20
 
+ADMIN_CODE = "TEST_OVIK"
 
-# ---------------------------------------------------------
-# Шрифт
-# ---------------------------------------------------------
+
+# =========================================================
+# ШРИФТ
+# =========================================================
 
 LabelBase.register(
     name="AppArial",
@@ -40,9 +51,9 @@ LabelBase.register(
 )
 
 
-# ---------------------------------------------------------
-# Загрузка банка вопросов
-# ---------------------------------------------------------
+# =========================================================
+# БАНК ВОПРОСОВ
+# =========================================================
 
 def load_bank():
     with DATA_PATH.open("r", encoding="utf-8") as file:
@@ -59,9 +70,9 @@ def load_bank():
     return bank_name, questions
 
 
-# ---------------------------------------------------------
-# Работа с ответами
-# ---------------------------------------------------------
+# =========================================================
+# ПРОВЕРКА ОТВЕТОВ
+# =========================================================
 
 def canon_list(value):
     if isinstance(value, list):
@@ -94,36 +105,120 @@ def is_correct(question, answer):
     )
 
 
-# ---------------------------------------------------------
-# Экран входа
-# ---------------------------------------------------------
+def is_numeric_answer(question):
+    """
+    Возвращает True только тогда, когда ВСЕ допустимые ответы
+    являются чистыми числами.
+
+    Примеры:
+    120       -> числовая клавиатура
+    2.5       -> числовая клавиатура
+    -15       -> числовая клавиатура
+
+    EI 60     -> обычная клавиатура
+    2 метра   -> обычная клавиатура
+    текст     -> обычная клавиатура
+    """
+
+    correct = question.get("correct", [])
+
+    if not isinstance(correct, list):
+        correct = [correct]
+
+    if not correct:
+        return False
+
+    numeric_pattern = re.compile(
+        r"^[+-]?\d+(?:[.,]\d+)?$"
+    )
+
+    return all(
+        numeric_pattern.fullmatch(
+            str(answer).strip()
+        )
+        is not None
+        for answer in correct
+    )
+
+
+# =========================================================
+# ГЛАВНЫЙ ЭКРАН
+# =========================================================
 
 class Login(Screen):
 
     bank = StringProperty("")
+    admin_enabled = BooleanProperty(False)
 
     def on_pre_enter(self, *args):
         app = App.get_running_app()
 
-        # Безопасно получаем название банка.
-        # Даже если экран откроется раньше полной
-        # инициализации приложения, падения не будет.
         self.bank = getattr(
             app,
             "bank_name",
             ""
         )
 
+        self.update_admin_state()
+
+    def update_admin_state(self, *args):
+        if "name" not in self.ids:
+            return
+
+        value = self.ids.name.text.strip()
+
+        self.admin_enabled = (
+            value == ADMIN_CODE
+        )
+
+        if self.admin_enabled:
+            self.ids.msg.text = (
+                "Административный режим доступен"
+            )
+            self.ids.msg.color = (
+                0.10, 0.45, 0.15, 1
+            )
+        else:
+            if self.ids.msg.text == (
+                "Административный режим доступен"
+            ):
+                self.ids.msg.text = ""
+
+            self.ids.msg.color = (
+                0.75, 0.10, 0.10, 1
+            )
+
+    def open_settings(self):
+        self.update_admin_state()
+
+        if not self.admin_enabled:
+            return
+
+        self.ids.name.text = ""
+
+        self.manager.current = "settings"
+
     def start(self, mode):
         name = self.ids.name.text.strip()
 
         if not name:
+            self.ids.msg.color = (
+                0.75, 0.10, 0.10, 1
+            )
             self.ids.msg.text = (
                 "Введите фамилию и инициалы"
             )
             return
 
-        self.ids.msg.text = ""
+        if name == ADMIN_CODE:
+            self.ids.msg.color = (
+                0.75, 0.10, 0.10, 1
+            )
+            self.ids.msg.text = (
+                "Для запуска тестирования "
+                "введите ФИО тестируемого"
+            )
+            return
 
         app = App.get_running_app()
 
@@ -138,18 +233,22 @@ class Login(Screen):
             )
             return
 
+        self.ids.msg.text = ""
+
         test_screen = self.manager.get_screen(
             "test"
         )
 
-        self.manager.current = "test"
-
+        # Сначала готовим тест.
         test_screen.begin()
 
+        # Затем показываем экран.
+        self.manager.current = "test"
 
-# ---------------------------------------------------------
-# Экран тестирования
-# ---------------------------------------------------------
+
+# =========================================================
+# ЭКРАН ТЕСТИРОВАНИЯ
+# =========================================================
 
 class Test(Screen):
 
@@ -157,6 +256,7 @@ class Test(Screen):
     progress = StringProperty("")
     timer = StringProperty("")
     source = StringProperty("")
+    message = StringProperty("")
 
     idx = NumericProperty(0)
 
@@ -178,6 +278,9 @@ class Test(Screen):
             DEFAULT_MINUTES * 60
         )
 
+        self.message = ""
+        self.source = ""
+
         if self.event:
             self.event.cancel()
             self.event = None
@@ -195,6 +298,9 @@ class Test(Screen):
 
         app.seconds -= 1
 
+        if app.seconds < 0:
+            app.seconds = 0
+
         self.timer = (
             f"{app.seconds // 60:02d}:"
             f"{app.seconds % 60:02d}"
@@ -206,7 +312,7 @@ class Test(Screen):
 
         return True
 
-    def save_current(self):
+    def get_current_answer(self):
         app = App.get_running_app()
 
         if not app.questions:
@@ -222,52 +328,57 @@ class Test(Screen):
             ""
         )
 
-        answer = ""
-
         if question_type == "текстовый":
 
-            if self.input is not None:
-                answer = (
-                    self.input.text.strip()
-                )
+            if self.input is None:
+                return ""
 
-        elif question_type == "один":
+            return self.input.text.strip()
 
-            if self.btns:
-                answer = next(
-                    (
-                        button.text
-                        for button in self.btns
-                        if button.state == "down"
-                    ),
-                    ""
-                )
+        if question_type == "один":
 
-        elif question_type == "несколько":
+            if not self.btns:
+                return ""
 
-            if self.btns:
-                answer = "; ".join(
-                    option
-                    for option, checkbox
-                    in self.btns
-                    if checkbox.active
-                )
+            return next(
+                (
+                    button.text
+                    for button in self.btns
+                    if button.state == "down"
+                ),
+                ""
+            )
+
+        if question_type == "несколько":
+
+            if not self.btns:
+                return ""
+
+            return "; ".join(
+                option
+                for option, checkbox
+                in self.btns
+                if checkbox.active
+            )
+
+        return ""
+
+    def save_current(self):
+        app = App.get_running_app()
+
+        answer = self.get_current_answer()
 
         if self.idx < len(app.saved):
             app.saved[self.idx] = answer
 
         return answer
 
-    def render(self):
-
-        from kivy.uix.togglebutton import (
-            ToggleButton
+    def has_answer(self):
+        return bool(
+            self.get_current_answer().strip()
         )
-        from kivy.uix.checkbox import CheckBox
-        from kivy.uix.boxlayout import BoxLayout
-        from kivy.uix.label import Label
-        from kivy.uix.textinput import TextInput
 
+    def render(self):
         app = App.get_running_app()
 
         if not app.questions:
@@ -281,9 +392,7 @@ class Test(Screen):
                 len(app.questions) - 1
             )
 
-        question = app.questions[
-            self.idx
-        ]
+        question = app.questions[self.idx]
 
         self.question = question.get(
             "text",
@@ -295,6 +404,7 @@ class Test(Screen):
             f"из {len(app.questions)}"
         )
 
+        self.message = ""
         self.source = ""
 
         if app.mode == "обучение":
@@ -325,10 +435,16 @@ class Test(Screen):
             )
 
         # -------------------------------------------------
-        # Текстовый вопрос
+        # ТЕКСТОВЫЙ ОТВЕТ
         # -------------------------------------------------
 
         if question_type == "текстовый":
+
+            keyboard_type = (
+                "number"
+                if is_numeric_answer(question)
+                else "text"
+            )
 
             self.input = TextInput(
                 text=saved_answer,
@@ -336,7 +452,9 @@ class Test(Screen):
                 font_name="AppArial",
                 font_size="18sp",
                 size_hint_y=None,
-                height="52dp"
+                height=dp(54),
+                input_type=keyboard_type,
+                write_tab=False
             )
 
             answers_box.add_widget(
@@ -344,7 +462,7 @@ class Test(Screen):
             )
 
         # -------------------------------------------------
-        # Один вариант ответа
+        # ОДИН ОТВЕТ
         # -------------------------------------------------
 
         elif question_type == "один":
@@ -356,19 +474,40 @@ class Test(Screen):
 
             for option in options:
 
+                option_text = str(option)
+
                 button = ToggleButton(
-                    text=str(option),
-                    group="ans",
+                    text=option_text,
+                    group="answer_group",
                     font_name="AppArial",
                     font_size="16sp",
                     size_hint_y=None,
-                    height="64dp"
+                    halign="center",
+                    valign="middle",
+                    padding=(
+                        dp(14),
+                        dp(12)
+                    )
                 )
 
-                if saved_answer == option:
+                # Перенос текста внутри кнопки.
+                button.text_size = (
+                    max(
+                        Window.width - dp(70),
+                        dp(200)
+                    ),
+                    None
+                )
+
+                button.bind(
+                    texture_size=self._resize_answer_button
+                )
+
+                if (
+                    str(saved_answer).strip()
+                    == option_text
+                ):
                     button.state = "down"
-                else:
-                    button.state = "normal"
 
                 answers_box.add_widget(
                     button
@@ -379,7 +518,7 @@ class Test(Screen):
                 )
 
         # -------------------------------------------------
-        # Несколько вариантов ответа
+        # НЕСКОЛЬКО ОТВЕТОВ
         # -------------------------------------------------
 
         elif question_type == "несколько":
@@ -399,8 +538,11 @@ class Test(Screen):
 
                 row = BoxLayout(
                     size_hint_y=None,
-                    height="64dp",
-                    spacing="6dp"
+                    spacing=dp(8),
+                    padding=(
+                        dp(4),
+                        dp(6)
+                    )
                 )
 
                 checkbox = CheckBox(
@@ -408,23 +550,23 @@ class Test(Screen):
                         option_text.casefold()
                         in saved
                     ),
-                    size_hint_x=.12
+                    size_hint_x=None,
+                    width=dp(48)
                 )
 
                 label = Label(
                     text=option_text,
                     font_name="AppArial",
+                    font_size="16sp",
+                    color=(0, 0, 0, 1),
                     halign="left",
-                    valign="middle"
+                    valign="middle",
+                    size_hint_y=None
                 )
 
                 label.bind(
-                    size=lambda widget, size:
-                    setattr(
-                        widget,
-                        "text_size",
-                        (size[0], None)
-                    )
+                    width=self._resize_multi_label,
+                    texture_size=self._resize_multi_row
                 )
 
                 row.add_widget(
@@ -452,12 +594,55 @@ class Test(Screen):
                 "тип вопроса"
             )
 
-    def next(self):
+    def _resize_answer_button(
+        self,
+        button,
+        texture_size
+    ):
+        button.height = max(
+            dp(64),
+            texture_size[1] + dp(30)
+        )
 
+    def _resize_multi_label(
+        self,
+        label,
+        width
+    ):
+        label.text_size = (
+            width,
+            None
+        )
+
+    def _resize_multi_row(
+        self,
+        label,
+        texture_size
+    ):
+        label.height = max(
+            dp(52),
+            texture_size[1] + dp(18)
+        )
+
+        if label.parent:
+            label.parent.height = (
+                label.height + dp(12)
+            )
+
+    def next(self):
         app = App.get_running_app()
 
         if not app.questions:
             return
+
+        if not self.has_answer():
+            self.message = (
+                "Сначала выберите "
+                "или введите ответ"
+            )
+            return
+
+        self.message = ""
 
         self.save_current()
 
@@ -472,22 +657,33 @@ class Test(Screen):
         self.render()
 
     def prev(self):
+        app = App.get_running_app()
 
-        if not App.get_running_app().questions:
+        if not app.questions:
             return
 
         self.save_current()
+
+        self.message = ""
 
         if self.idx > 0:
             self.idx -= 1
             self.render()
 
     def show_correct(self):
-
         app = App.get_running_app()
 
         if not app.questions:
             return
+
+        if not self.has_answer():
+            self.message = (
+                "Сначала выберите "
+                "или введите ответ"
+            )
+            return
+
+        self.message = ""
 
         self.save_current()
 
@@ -516,12 +712,11 @@ class Test(Screen):
         self.source = (
             "Правильный ответ: "
             + correct_text
-            + "\nИсточник: "
+            + "\n\nИсточник: "
             + str(source)
         )
 
     def finish(self):
-
         app = App.get_running_app()
 
         try:
@@ -561,7 +756,7 @@ class Test(Screen):
             f"{app.user}\n\n"
             f"Результат: "
             f"{score} из "
-            f"{len(app.questions)}\n"
+            f"{len(app.questions)}\n\n"
             + (
                 "Тест пройден"
                 if passed
@@ -572,29 +767,36 @@ class Test(Screen):
         self.manager.current = "result"
 
 
-# ---------------------------------------------------------
-# Экран результата
-# ---------------------------------------------------------
+# =========================================================
+# РЕЗУЛЬТАТ
+# =========================================================
 
 class Result(Screen):
 
     text = StringProperty("")
 
 
-# ---------------------------------------------------------
-# Основное приложение
-# ---------------------------------------------------------
+# =========================================================
+# НАСТРОЙКИ / АДМИН
+# =========================================================
 
-class TestOVApp(App):
+class Settings(Screen):
+
+    def go_back(self):
+        self.manager.current = "login"
+
+
+# =========================================================
+# ПРИЛОЖЕНИЕ
+# =========================================================
+
+class TechProfiApp(App):
 
     title = APP_NAME
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        # Все используемые поля создаём заранее.
-        # Это исключает ошибку вида:
-        # AttributeError: TestOVApp has no attribute ...
         self.bank_name = ""
         self.pool = []
         self.questions = []
@@ -606,40 +808,38 @@ class TestOVApp(App):
         self.seconds = 0
 
     def build(self):
-
-        # Сначала загружаем данные.
         self.bank_name, self.pool = (
             load_bank()
         )
 
-        # Только после этого создаём интерфейс.
-        root = Builder.load_file(
+        # Android должен уменьшать рабочую область
+        # при появлении клавиатуры.
+        try:
+            Window.softinput_mode = (
+                "below_target"
+            )
+        except Exception:
+            pass
+
+        return Builder.load_file(
             str(KV_PATH)
         )
 
-        return root
-
     def on_start(self):
+        if not self.root:
+            return
 
-        # Дополнительно обновляем название
-        # банка после полного запуска App.
-        if self.root:
-            try:
-                login = (
-                    self.root.get_screen(
-                        "login"
-                    )
-                )
+        try:
+            login = self.root.get_screen(
+                "login"
+            )
 
-                login.bank = (
-                    self.bank_name
-                )
+            login.bank = self.bank_name
 
-            except Exception:
-                pass
+        except Exception:
+            pass
 
     def prepare_questions(self):
-
         self.questions = list(
             self.pool
         )
@@ -659,9 +859,9 @@ class TestOVApp(App):
             )
 
 
-# ---------------------------------------------------------
-# Запуск
-# ---------------------------------------------------------
+# =========================================================
+# ЗАПУСК
+# =========================================================
 
 if __name__ == "__main__":
-    TestOVApp().run()
+    TechProfiApp().run()
