@@ -16,13 +16,13 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Java 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
 
@@ -39,9 +39,20 @@ jobs:
           python -m pip install --upgrade pip setuptools wheel
           python -m pip install "Cython==0.29.36" buildozer
 
-      - name: Build APK
+      - name: Accept Android SDK licenses
         run: |
-          buildozer android debug
+          mkdir -p "$HOME/.buildozer/android/platform/android-sdk/licenses"
+          printf '%s\n' \
+            8933bad161af4178b1185d1a37fbf41ea5269c55 \
+            d56f5187479451eabf01fb78af6dfcb131a6481e \
+            24333f8a63b6825ea9c5514f83c2829b004d1fee \
+            > "$HOME/.buildozer/android/platform/android-sdk/licenses/android-sdk-license"
+
+      - name: Build APK
+        env:
+          BUILDOZER_WARN_ON_ROOT: "0"
+        run: |
+          yes | buildozer android debug
 
       - name: Show build output
         if: always()
