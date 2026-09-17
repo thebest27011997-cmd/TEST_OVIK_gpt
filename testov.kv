@@ -3,91 +3,159 @@
 
 <Label>:
     font_name: 'AppArial'
+    italic: False
 
 
 <Button>:
     font_name: 'AppArial'
+    italic: False
 
 
 <ToggleButton>:
     font_name: 'AppArial'
+    italic: False
 
 
 ScreenManager:
     Login:
     Test:
     Result:
+    Settings:
 
 
 <Login>:
     name: 'login'
 
-    BoxLayout:
-        orientation: 'vertical'
-        padding: dp(24)
-        spacing: dp(14)
+    canvas.before:
+        Color:
+            rgba: 0.93, 0.88, 0.78, 1
+        Rectangle:
+            pos: self.pos
+            size: self.size
 
-        Label:
-            text: 'Тест_ОВ'
-            font_size: '30sp'
-            size_hint_y: .20
+    ScrollView:
+        do_scroll_x: False
+        do_scroll_y: True
 
-        Label:
-            text: 'Банк вопросов: ' + root.bank
-            font_size: '16sp'
+        BoxLayout:
+            orientation: 'vertical'
             size_hint_y: None
-            height: dp(48)
-            text_size: self.width, None
-            halign: 'center'
+            height: max(self.minimum_height, root.height)
+            padding: dp(24)
+            spacing: dp(14)
 
-        TextInput:
-            id: name
-            hint_text: 'Фамилия и инициалы'
-            font_name: 'AppArial'
-            multiline: False
-            size_hint_y: None
-            height: dp(52)
+            Widget:
+                size_hint_y: None
+                height: dp(16)
 
-        Label:
-            id: msg
-            text: ''
-            color: 1, .2, .2, 1
-            size_hint_y: None
-            height: dp(32)
+            Label:
+                text: 'ТехПрофи'
+                color: 0, 0, 0, 1
+                font_size: '30sp'
+                bold: True
+                size_hint_y: None
+                height: dp(58)
 
-        Button:
-            text: 'Контрольные вопросы'
-            size_hint_y: None
-            height: dp(56)
-            on_release: root.start('контроль')
+            Label:
+                text: 'Банк вопросов: ' + root.bank
+                color: 0, 0, 0, 1
+                font_size: '16sp'
+                size_hint_y: None
+                height: max(dp(48), self.texture_size[1] + dp(16))
+                text_size: self.width, None
+                halign: 'center'
+                valign: 'middle'
 
-        Button:
-            text: 'Обучение'
-            size_hint_y: None
-            height: dp(56)
-            on_release: root.start('обучение')
+            TextInput:
+                id: name
+                hint_text: 'Фамилия и инициалы'
+                font_name: 'AppArial'
+                font_size: '18sp'
+                multiline: False
+                size_hint_y: None
+                height: dp(54)
+                foreground_color: 0, 0, 0, 1
+                background_color: 1, 1, 1, 1
+                on_text: root.update_admin_state()
+
+            Label:
+                id: msg
+                text: ''
+                color: .75, .1, .1, 1
+                font_size: '15sp'
+                size_hint_y: None
+                height: max(dp(34), self.texture_size[1] + dp(8))
+                text_size: self.width, None
+                halign: 'center'
+                valign: 'middle'
+
+            Button:
+                text: 'Контрольное тестирование'
+                color: 0, 0, 0, 1
+                background_normal: ''
+                background_color: .84, .77, .64, 1
+                size_hint_y: None
+                height: dp(58)
+                on_release: root.start('контроль')
+
+            Button:
+                text: 'Обучение'
+                color: 0, 0, 0, 1
+                background_normal: ''
+                background_color: .84, .77, .64, 1
+                size_hint_y: None
+                height: dp(58)
+                on_release: root.start('обучение')
+
+            Button:
+                text: 'Настройки'
+                color: (0, 0, 0, 1) if root.admin_enabled else (.45, .45, .45, 1)
+                background_normal: ''
+                background_color: (.82, .76, .63, 1) if root.admin_enabled else (.68, .68, .68, 1)
+                disabled: not root.admin_enabled
+                size_hint_y: None
+                height: dp(54)
+                on_release: root.open_settings()
+
+            Widget:
+                size_hint_y: None
+                height: dp(24)
 
 
 <Test>:
     name: 'test'
 
+    canvas.before:
+        Color:
+            rgba: .97, .97, .97, 1
+        Rectangle:
+            pos: self.pos
+            size: self.size
+
     BoxLayout:
         orientation: 'vertical'
-        padding: dp(14)
+        padding: dp(12)
         spacing: dp(8)
 
         BoxLayout:
             size_hint_y: None
-            height: dp(38)
+            height: dp(44)
+            spacing: dp(8)
 
             Label:
                 text: root.progress
+                color: 0, 0, 0, 1
+                font_size: '18sp'
                 halign: 'left'
+                valign: 'middle'
                 text_size: self.size
 
             Label:
                 text: root.timer
+                color: 0, 0, 0, 1
+                font_size: '18sp'
                 halign: 'right'
+                valign: 'middle'
                 text_size: self.size
 
         ScrollView:
@@ -97,51 +165,133 @@ ScreenManager:
                 orientation: 'vertical'
                 size_hint_y: None
                 height: self.minimum_height
-                spacing: dp(10)
+                spacing: dp(12)
+                padding: dp(4), dp(4)
 
                 Label:
                     text: root.question
-                    text_size: self.width, None
+                    color: 0, 0, 0, 1
+                    text_size: self.width - dp(12), None
                     size_hint_y: None
                     height: self.texture_size[1] + dp(28)
                     font_size: '19sp'
+                    halign: 'left'
+                    valign: 'middle'
 
                 BoxLayout:
                     id: answers
                     orientation: 'vertical'
                     size_hint_y: None
                     height: self.minimum_height
-                    spacing: dp(6)
+                    spacing: dp(8)
+
+                Label:
+                    text: root.message
+                    color: .8, .1, .1, 1
+                    font_size: '15sp'
+                    text_size: self.width, None
+                    size_hint_y: None
+                    height: dp(36) if root.message else 0
+                    halign: 'center'
+                    valign: 'middle'
 
                 Label:
                     text: root.source
+                    color: 0, 0, 0, 1
                     text_size: self.width, None
                     size_hint_y: None
-                    height: self.texture_size[1] + dp(18)
+                    height: self.texture_size[1] + dp(18) if root.source else 0
                     font_size: '15sp'
+                    halign: 'left'
+                    valign: 'middle'
+
+        Button:
+            text: 'Завершить тестирование'
+            color: 0, 0, 0, 1
+            background_normal: ''
+            background_color: .88, .75, .65, 1
+            size_hint_y: None
+            height: dp(46)
+            on_release: root.finish()
 
         BoxLayout:
             size_hint_y: None
-            height: dp(56)
-            spacing: dp(6)
+            height: dp(58)
+            spacing: dp(8)
 
             Button:
-                text: 'Назад'
+                text: 'Предыдущий вопрос'
+                color: 0, 0, 0, 1
+                background_normal: ''
+                background_color: .84, .84, .84, 1
+                disabled: root.idx <= 0
                 on_release: root.prev()
 
             Button:
                 text: 'Ответ'
-                on_release: root.show_correct()
+                color: 0, 0, 0, 1
+                background_normal: ''
+                background_color: .82, .78, .68, 1
                 opacity: 1 if app.mode == 'обучение' else 0
                 disabled: app.mode != 'обучение'
+                size_hint_x: 1 if app.mode == 'обучение' else 0
+                width: self.minimum_width if app.mode == 'обучение' else 0
+                on_release: root.show_correct()
 
             Button:
-                text: 'Далее'
+                text: 'Следующий вопрос'
+                color: 0, 0, 0, 1
+                background_normal: ''
+                background_color: .84, .84, .84, 1
                 on_release: root.next()
 
 
 <Result>:
     name: 'result'
+
+    canvas.before:
+        Color:
+            rgba: .93, .88, .78, 1
+        Rectangle:
+            pos: self.pos
+            size: self.size
+
+    BoxLayout:
+        orientation: 'vertical'
+        padding: dp(24)
+        spacing: dp(16)
+
+        Widget:
+
+        Label:
+            text: root.text
+            color: 0, 0, 0, 1
+            font_size: '24sp'
+            halign: 'center'
+            valign: 'middle'
+            text_size: self.width, None
+
+        Button:
+            text: 'На главный экран'
+            color: 0, 0, 0, 1
+            background_normal: ''
+            background_color: .84, .77, .64, 1
+            size_hint_y: None
+            height: dp(56)
+            on_release: app.root.current = 'login'
+
+        Widget:
+
+
+<Settings>:
+    name: 'settings'
+
+    canvas.before:
+        Color:
+            rgba: .93, .88, .78, 1
+        Rectangle:
+            pos: self.pos
+            size: self.size
 
     BoxLayout:
         orientation: 'vertical'
@@ -149,13 +299,33 @@ ScreenManager:
         spacing: dp(16)
 
         Label:
-            text: root.text
-            font_size: '24sp'
-            halign: 'center'
+            text: 'Настройки'
+            color: 0, 0, 0, 1
+            font_size: '28sp'
+            bold: True
+            size_hint_y: None
+            height: dp(60)
+
+        Label:
+            text: 'Административный режим'
+            color: 0, 0, 0, 1
+            font_size: '18sp'
+            size_hint_y: None
+            height: dp(48)
+
+        Label:
+            text: 'Параметры администратора добавим на следующем этапе.'
+            color: .2, .2, .2, 1
+            font_size: '16sp'
             text_size: self.width, None
+            halign: 'center'
+            valign: 'middle'
 
         Button:
-            text: 'На главный экран'
+            text: 'Назад'
+            color: 0, 0, 0, 1
+            background_normal: ''
+            background_color: .84, .77, .64, 1
             size_hint_y: None
-            height: dp(54)
-            on_release: app.root.current = 'login'
+            height: dp(56)
+            on_release: root.go_back()
