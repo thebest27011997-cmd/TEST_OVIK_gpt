@@ -12,13 +12,15 @@ jobs:
     timeout-minutes: 90
 
     env:
-      ANDROID_SDK_ROOT: ${{ github.workspace }}/.android-sdk
-      ANDROID_HOME: ${{ github.workspace }}/.android-sdk
+      ANDROID_SDK_ROOT: /home/runner/.buildozer/android/platform/android-sdk
+      ANDROID_HOME: /home/runner/.buildozer/android/platform/android-sdk
+      ANDROIDSDK: /home/runner/.buildozer/android/platform/android-sdk
       BUILDOZER_WARN_ON_ROOT: "0"
 
     steps:
+
       # ============================================================
-      # 1. Получаем исходники приложения
+      # 1. Получаем проект
       # ============================================================
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -41,7 +43,7 @@ jobs:
           python-version: "3.11"
 
       # ============================================================
-      # 4. Системные зависимости
+      # 4. Linux-зависимости
       # ============================================================
       - name: Install Linux dependencies
         run: |
@@ -70,7 +72,7 @@ jobs:
             libssl-dev
 
       # ============================================================
-      # 5. Buildozer + Cython
+      # 5. Buildozer
       # ============================================================
       - name: Install Buildozer
         run: |
@@ -80,20 +82,32 @@ jobs:
             "Cython==0.29.36" \
             "buildozer==1.5.0"
 
-          echo "Buildozer version:"
-          buildozer --version
+          echo "======================"
+          echo "VERSIONS"
+          echo "======================"
 
-          echo "Cython version:"
+          python --version
+          java -version
+          buildozer --version
           cython --version
 
       # ============================================================
-      # 6. Android Command Line Tools
+      # 6. Создаём ЕДИНСТВЕННЫЙ Android SDK
+      #
+      # Это именно каталог, который использует Buildozer.
       # ============================================================
-      - name: Install Android Command Line Tools
+      - name: Prepare Buildozer Android SDK
         run: |
+          echo "SDK location:"
+          echo "$ANDROID_SDK_ROOT"
+
           mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
 
           cd /tmp
+
+          rm -rf \
+            android-commandline-tools.zip \
+            cmdline-tools
 
           wget -q \
             https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip \
@@ -101,46 +115,29 @@ jobs:
 
           unzip -q android-commandline-tools.zip
 
-          mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools/latest"
+          mkdir -p \
+            "$ANDROID_SDK_ROOT/cmdline-tools/latest"
 
           cp -R \
-            cmdline-tools/. \
+            /tmp/cmdline-tools/. \
             "$ANDROID_SDK_ROOT/cmdline-tools/latest/"
 
-          echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
-          echo "$ANDROID_SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
+          echo \
+            "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" \
+            >> "$GITHUB_PATH"
+
+          echo \
+            "$ANDROID_SDK_ROOT/platform-tools" \
+            >> "$GITHUB_PATH"
+
+          echo \
+            "$ANDROID_SDK_ROOT/build-tools/35.0.0" \
+            >> "$GITHUB_PATH"
 
       # ============================================================
-      # 7. Принимаем лицензии Android
+      # 7. Создаём старый путь, который ожидает Buildozer
       # ============================================================
-      - name: Accept Android licenses
-        run: |
-          export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH"
-
-          yes | sdkmanager --licenses || true
-
-      # ============================================================
-      # 8. Устанавливаем SDK под android.api = 35
-      # ============================================================
-      - name: Install Android SDK packages
-        run: |
-          export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH"
-
-          sdkmanager \
-            "platform-tools" \
-            "platforms;android-35" \
-            "build-tools;35.0.0"
-
-      # ============================================================
-      # 9. Совместимость со старым Buildozer
-      #
-      # Buildozer может искать:
-      # android-sdk/tools/bin/sdkmanager
-      #
-      # Современный SDK хранит его:
-      # cmdline-tools/latest/bin/sdkmanager
-      # ============================================================
-      - name: Create Buildozer SDK compatibility paths
+      - name: Create Buildozer compatibility paths
         run: |
           mkdir -p "$ANDROID_SDK_ROOT/tools/bin"
 
@@ -153,22 +150,57 @@ jobs:
             "$ANDROID_SDK_ROOT/tools/bin/avdmanager"
 
           chmod +x \
-            "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" \
+            "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+
+          chmod +x \
             "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/avdmanager"
+
+      # ============================================================
+      # 8. Принимаем лицензии В ТОМ ЖЕ SDK
+      # ============================================================
+      - name: Accept Android SDK licenses
+        run: |
+          export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH"
+
+          yes | sdkmanager \
+            --sdk_root="$ANDROID_SDK_ROOT" \
+            --licenses || true
+
+          echo "======================"
+          echo "LICENSE DIRECTORY"
+          echo "======================"
+
+          ls -la \
+            "$ANDROID_SDK_ROOT/licenses" \
+            || true
+
+      # ============================================================
+      # 9. Устанавливаем Android API 35
+      # ============================================================
+      - name: Install Android SDK packages
+        run: |
+          export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH"
+
+          sdkmanager \
+            --sdk_root="$ANDROID_SDK_ROOT" \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
 
       # ============================================================
       # 10. Проверяем SDK ДО Buildozer
       # ============================================================
       - name: Verify Android SDK
         run: |
-          export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH"
+          export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/build-tools/35.0.0:$PATH"
 
-          echo "ANDROID_SDK_ROOT:"
-          echo "$ANDROID_SDK_ROOT"
+          echo "======================"
+          echo "ANDROID ENVIRONMENT"
+          echo "======================"
 
-          echo ""
-          echo "Java:"
-          java -version
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROIDSDK=$ANDROIDSDK"
 
           echo ""
           echo "sdkmanager:"
@@ -176,7 +208,7 @@ jobs:
           sdkmanager --version
 
           echo ""
-          echo "Android platforms:"
+          echo "Platforms:"
           ls -la "$ANDROID_SDK_ROOT/platforms"
 
           echo ""
@@ -185,22 +217,40 @@ jobs:
 
           echo ""
           echo "AIDL:"
-          find "$ANDROID_SDK_ROOT/build-tools" \
+          find \
+            "$ANDROID_SDK_ROOT/build-tools" \
             -type f \
             -name aidl \
             -print
 
           echo ""
-          echo "Compatibility sdkmanager:"
-          ls -la "$ANDROID_SDK_ROOT/tools/bin/sdkmanager"
+          echo "Old Buildozer sdkmanager path:"
+          ls -la \
+            "$ANDROID_SDK_ROOT/tools/bin/sdkmanager"
 
-          test -x "$ANDROID_SDK_ROOT/tools/bin/sdkmanager"
+          # Критические проверки.
+          # Если здесь ошибка — Buildozer даже не запускаем.
+
+          test -x \
+            "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+
+          test -x \
+            "$ANDROID_SDK_ROOT/tools/bin/sdkmanager"
 
           test -f \
+            "$ANDROID_SDK_ROOT/platforms/android-35/android.jar"
+
+          test -x \
             "$ANDROID_SDK_ROOT/build-tools/35.0.0/aidl"
 
+          test -d \
+            "$ANDROID_SDK_ROOT/licenses"
+
+          echo ""
+          echo "ANDROID SDK CHECK PASSED"
+
       # ============================================================
-      # 11. Проверяем файлы нашего приложения
+      # 11. Проверяем приложение
       # ============================================================
       - name: Verify application files
         run: |
@@ -212,68 +262,83 @@ jobs:
           test -d data
           test -d fonts
 
-          echo "Application files OK"
-
-          echo ""
-          echo "Project structure:"
-          find . \
-            -maxdepth 2 \
-            -type f \
-            ! -path "./.git/*" \
-            ! -path "./.android-sdk/*" \
-            -print
+          echo "======================"
+          echo "APPLICATION FILES OK"
+          echo "======================"
 
       # ============================================================
-      # 12. Показываем Buildozer configuration
+      # 12. Проверяем buildozer.spec
       # ============================================================
-      - name: Check Buildozer configuration
+      - name: Verify Buildozer configuration
         run: |
-          echo "Android API from buildozer.spec:"
+          echo "======================"
+          echo "BUILDOZER CONFIG"
+          echo "======================"
+
           grep "^android.api" buildozer.spec
-
-          echo ""
-          echo "Minimum Android API:"
           grep "^android.minapi" buildozer.spec
-
-          echo ""
-          echo "Requirements:"
           grep "^requirements" buildozer.spec
+          grep "^icon.filename" buildozer.spec
+
+          grep -q "^android.api = 35" buildozer.spec
 
       # ============================================================
-      # 13. Сборка APK
+      # 13. Последняя проверка лицензий
+      # ============================================================
+      - name: Final Android license check
+        run: |
+          export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH"
+
+          yes | sdkmanager \
+            --sdk_root="$ANDROID_SDK_ROOT" \
+            --licenses || true
+
+          echo "Installed SDK packages:"
+
+          sdkmanager \
+            --sdk_root="$ANDROID_SDK_ROOT" \
+            --list_installed
+
+      # ============================================================
+      # 14. Сборка APK
       # ============================================================
       - name: Build APK
-        env:
-          ANDROIDSDK: ${{ env.ANDROID_SDK_ROOT }}
-          ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
-          ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
-          BUILDOZER_WARN_ON_ROOT: "0"
         run: |
-          export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH"
+          export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/build-tools/35.0.0:$PATH"
+
+          echo "======================"
+          echo "STARTING APK BUILD"
+          echo "======================"
+
+          echo "SDK used by Buildozer:"
+          echo "$ANDROIDSDK"
 
           buildozer -v android debug
 
       # ============================================================
-      # 14. Диагностика результата
-      # Выполнится даже при ошибке
+      # 15. Диагностика — выполняется даже после ошибки
       # ============================================================
       - name: Show build result
         if: always()
         run: |
-          echo "=============================="
+          echo "======================"
           echo "BIN DIRECTORY"
-          echo "=============================="
+          echo "======================"
 
           if [ -d "bin" ]; then
-            find bin -maxdepth 2 -type f -print
+            find \
+              bin \
+              -maxdepth 2 \
+              -type f \
+              -print
           else
             echo "bin directory does not exist"
           fi
 
           echo ""
-          echo "=============================="
+          echo "======================"
           echo "APK SEARCH"
-          echo "=============================="
+          echo "======================"
 
           find . \
             -type f \
@@ -282,12 +347,18 @@ jobs:
             2>/dev/null || true
 
       # ============================================================
-      # 15. Проверяем, что APK действительно создан
+      # 16. Проверяем APK
       # ============================================================
       - name: Verify APK
         if: success()
         run: |
-          APK_COUNT=$(find bin -maxdepth 1 -type f -name "*.apk" | wc -l)
+          APK_COUNT=$(
+            find bin \
+              -maxdepth 1 \
+              -type f \
+              -name "*.apk" \
+              | wc -l
+          )
 
           echo "APK files found: $APK_COUNT"
 
@@ -296,10 +367,14 @@ jobs:
             exit 1
           fi
 
+          echo "======================"
+          echo "APK CREATED"
+          echo "======================"
+
           ls -lh bin/*.apk
 
       # ============================================================
-      # 16. Сохраняем APK в GitHub Actions
+      # 17. Загружаем готовый APK
       # ============================================================
       - name: Upload APK
         if: success()
