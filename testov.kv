@@ -1,0 +1,47 @@
+#:import dp kivy.metrics.dp
+<Label>:
+    font_name:'AppArial'
+<Button>:
+    font_name:'AppArial'
+<ToggleButton>:
+    font_name:'AppArial'
+ScreenManager:
+    Login:
+    Test:
+    Result:
+<Login>:
+    name:'login'
+    BoxLayout:
+        orientation:'vertical'; padding:dp(24); spacing:dp(14)
+        Label: text:'Тест_ОВ'; font_size:'30sp'; size_hint_y:.20
+        Label: text:'Банк вопросов: ' + root.bank; font_size:'16sp'; size_hint_y:None; height:dp(48); text_size:self.width,None; halign:'center'
+        TextInput: id:name; hint_text:'Фамилия и инициалы'; font_name:'AppArial'; multiline:False; size_hint_y:None; height:dp(52)
+        Label: id:msg; text:''; color:1,.2,.2,1; size_hint_y:None; height:dp(32)
+        Button: text:'Контрольные вопросы'; size_hint_y:None; height:dp(56); on_release:root.start('контроль')
+        Button: text:'Обучение'; size_hint_y:None; height:dp(56); on_release:root.start('обучение')
+<Test>:
+    name:'test'
+    BoxLayout:
+        orientation:'vertical'; padding:dp(14); spacing:dp(8)
+        BoxLayout:
+            size_hint_y:None; height:dp(38)
+            Label: text:root.progress; halign:'left'; text_size:self.size
+            Label: text:root.timer; halign:'right'; text_size:self.size
+        ScrollView:
+            do_scroll_x:False
+            BoxLayout:
+                orientation:'vertical'; size_hint_y:None; height:self.minimum_height; spacing:dp(10)
+                Label: text:root.question; text_size:self.width,None; size_hint_y:None; height:self.texture_size[1]+dp(28); font_size:'19sp'
+                BoxLayout: id:answers; orientation:'vertical'; size_hint_y:None; height:self.minimum_height; spacing:dp(6)
+                Label: text:root.source; text_size:self.width,None; size_hint_y:None; height:self.texture_size[1]+dp(18); font_size:'15sp'
+        BoxLayout:
+            size_hint_y:None; height:dp(56); spacing:dp(6)
+            Button: text:'Назад'; on_release:root.prev()
+            Button: text:'Ответ'; on_release:root.show_correct(); opacity:1 if app.mode=='обучение' else 0; disabled:app.mode!='обучение'
+            Button: text:'Далее'; on_release:root.next()
+<Result>:
+    name:'result'
+    BoxLayout:
+        orientation:'vertical'; padding:dp(24); spacing:dp(16)
+        Label: text:root.text; font_size:'24sp'; halign:'center'; text_size:self.width,None
+        Button: text:'На главный экран'; size_hint_y:None; height:dp(54); on_release:app.root.current='login'
