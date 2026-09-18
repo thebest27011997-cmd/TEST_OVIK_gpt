@@ -23,7 +23,6 @@ from kivy.uix.screenmanager import Screen
 from kivy.uix.textinput import TextInput
 from kivy.uix.togglebutton import ToggleButton
 
-
 # =========================================================
 # ПУТИ И НАСТРОЙКИ
 # =========================================================
