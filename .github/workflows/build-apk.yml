@@ -128,33 +128,24 @@ jobs:
 
               stripped = line.strip()
 
-              if stripped.startswith(
-                  "p4a.branch"
-              ):
+              if stripped.startswith("p4a.branch"):
                   continue
 
-              if stripped.startswith(
-                  "android.sdk_path"
-              ):
+              if stripped.startswith("android.sdk_path"):
                   continue
 
-              if stripped.startswith(
-                  "android.ndk_path"
-              ):
+              if stripped.startswith("android.ndk_path"):
                   continue
 
               new_lines.append(line)
 
-          text = "\n".join(
-              new_lines
-          ) + "\n"
+          text = "\n".join(new_lines) + "\n"
 
           marker = "[buildozer]"
 
           if marker not in text:
               raise RuntimeError(
-                  "Section [buildozer] "
-                  "not found in buildozer.spec"
+                  "Section [buildozer] not found in buildozer.spec"
               )
 
           text = text.replace(
@@ -172,9 +163,7 @@ jobs:
               encoding="utf-8"
           )
 
-          print(
-              "buildozer.spec updated"
-          )
+          print("buildozer.spec updated")
           PY
 
           echo "================================"
@@ -195,11 +184,8 @@ jobs:
           set -euxo pipefail
 
           SDK_DIR="$HOME/.buildozer/android/platform/android-sdk"
-
           ZIP_FILE="$RUNNER_TEMP/android-command-line-tools.zip"
-
           TEMP_DIR="$RUNNER_TEMP/android-command-line-tools"
-
           SDKMANAGER="$SDK_DIR/cmdline-tools/latest/bin/sdkmanager"
 
           echo "================================"
@@ -209,49 +195,23 @@ jobs:
           rm -rf "$SDK_DIR"
           rm -rf "$TEMP_DIR"
 
-          mkdir -p \
-            "$SDK_DIR/cmdline-tools"
-
-          mkdir -p \
-            "$SDK_DIR/licenses"
-
-          mkdir -p \
-            "$TEMP_DIR"
-
-
-          # --------------------------------------------------------
-          # Download Android Command Line Tools
-          # --------------------------------------------------------
+          mkdir -p "$SDK_DIR/cmdline-tools"
+          mkdir -p "$SDK_DIR/licenses"
+          mkdir -p "$TEMP_DIR"
 
           wget -q \
             https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip \
             -O "$ZIP_FILE"
 
-
-          # --------------------------------------------------------
-          # Extract
-          # --------------------------------------------------------
-
           unzip -q \
             "$ZIP_FILE" \
             -d "$TEMP_DIR"
-
-
-          # --------------------------------------------------------
-          # Correct modern SDK layout
-          # --------------------------------------------------------
 
           mv \
             "$TEMP_DIR/cmdline-tools" \
             "$SDK_DIR/cmdline-tools/latest"
 
-
-          # --------------------------------------------------------
-          # Buildozer 1.5 compatibility layout
-          # --------------------------------------------------------
-
-          mkdir -p \
-            "$SDK_DIR/tools"
+          mkdir -p "$SDK_DIR/tools"
 
           ln -s \
             "$SDK_DIR/cmdline-tools/latest/bin" \
@@ -265,11 +225,6 @@ jobs:
             "$SDK_DIR/cmdline-tools/latest/source.properties" \
             "$SDK_DIR/tools/source.properties"
 
-
-          # --------------------------------------------------------
-          # Android licenses
-          # --------------------------------------------------------
-
           echo \
             "8933bad161af4178b1185d1a37fbf41ea5269c55" \
             > "$SDK_DIR/licenses/android-sdk-license"
@@ -282,28 +237,16 @@ jobs:
             "24333f8a63b6825ea9c5514f83c2829b004d1fee" \
             > "$SDK_DIR/licenses/android-sdk-preview-license"
 
-
-          # --------------------------------------------------------
-          # Verify sdkmanager
-          # --------------------------------------------------------
-
           echo "================================"
           echo "SDKMANAGER CHECK"
           echo "================================"
 
           test -x "$SDKMANAGER"
-
-          test -x \
-            "$SDK_DIR/tools/bin/sdkmanager"
+          test -x "$SDK_DIR/tools/bin/sdkmanager"
 
           "$SDKMANAGER" \
             --sdk_root="$SDK_DIR" \
             --version
-
-
-          # --------------------------------------------------------
-          # Accept licenses
-          # --------------------------------------------------------
 
           yes | \
             "$SDKMANAGER" \
@@ -311,21 +254,11 @@ jobs:
             --licenses \
             >/dev/null || true
 
-
-          # --------------------------------------------------------
-          # Install Android packages
-          # --------------------------------------------------------
-
           "$SDKMANAGER" \
             --sdk_root="$SDK_DIR" \
             "platform-tools" \
             "platforms;android-35" \
             "build-tools;35.0.0"
-
-
-          # --------------------------------------------------------
-          # Verify packages
-          # --------------------------------------------------------
 
           echo "================================"
           echo "VERIFY ANDROID PACKAGES"
@@ -347,14 +280,7 @@ jobs:
 
 
       # ============================================================
-      # 8. FULL CLEAN PROJECT BUILD
-      #
-      # ВАЖНО:
-      # Полностью удаляем локальную .buildozer проекта.
-      # Это исключает использование старых Python/NDK артефактов.
-      #
-      # $HOME/.buildozer НЕ удаляется.
-      # Подготовленный Android SDK сохраняется.
+      # 8. FULL CLEAN
       # ============================================================
 
       - name: Full clean previous project build
@@ -365,24 +291,94 @@ jobs:
           echo "FULL CLEAN PROJECT BUILD"
           echo "================================"
 
-          echo "Removing project .buildozer..."
           rm -rf .buildozer
-
-          echo "Removing old APK output..."
           rm -rf bin
+          rm -rf patches
 
           mkdir -p bin
+          mkdir -p patches
+
+          test ! -d .buildozer
+          test -d bin
 
           echo "================================"
           echo "PROJECT BUILD CACHE REMOVED"
           echo "================================"
 
-          test ! -d .buildozer
-          test -d bin
+
+      # ============================================================
+      # 9. CREATE UUID PATCH SCRIPT
+      # ============================================================
+
+      - name: Prepare Python uuid patch
+        run: |
+          set -euxo pipefail
+
+          cat > patches/patch_python_uuid.py <<'PY'
+          from pathlib import Path
+
+          root = Path(".buildozer")
+
+          if not root.exists():
+              print("ERROR: .buildozer directory does not exist")
+              raise SystemExit(1)
+
+          candidates = {
+              "setup.py",
+              "Setup",
+              "Setup.local",
+              "Makefile",
+              "Makefile.pre",
+              "Makefile.pre.in",
+          }
+
+          changed = 0
+
+          for path in root.rglob("*"):
+
+              if not path.is_file():
+                  continue
+
+              if path.name not in candidates:
+                  continue
+
+              try:
+                  text = path.read_text(
+                      encoding="utf-8",
+                      errors="ignore",
+                  )
+              except Exception:
+                  continue
+
+              if "-luuid" not in text:
+                  continue
+
+              print("FOUND -luuid:", path)
+
+              new_text = text.replace(
+                  "-luuid",
+                  "",
+              )
+
+              path.write_text(
+                  new_text,
+                  encoding="utf-8",
+              )
+
+              changed += 1
+
+              print("PATCHED:", path)
+
+          print("--------------------------------")
+          print("Files patched:", changed)
+          print("--------------------------------")
+          PY
+
+          echo "UUID patch script created."
 
 
       # ============================================================
-      # 9. VERIFY APPLICATION FILES
+      # 10. VERIFY APPLICATION FILES
       # ============================================================
 
       - name: Verify application files
@@ -406,7 +402,6 @@ jobs:
             "^(title|package.name|package.domain|source.dir|source.include_exts|requirements|android.api|android.minapi|android.archs|p4a.branch)" \
             buildozer.spec || true
 
-
           echo "--------------------------------"
           echo "Python files"
           echo "--------------------------------"
@@ -416,7 +411,6 @@ jobs:
             -type f \
             -name "*.py" \
             -print
-
 
           echo "--------------------------------"
           echo "KV files"
@@ -428,7 +422,6 @@ jobs:
             -name "*.kv" \
             -print
 
-
           echo "--------------------------------"
           echo "DATA DIRECTORY"
           echo "--------------------------------"
@@ -439,7 +432,6 @@ jobs:
             -maxdepth 1 \
             -type f \
             -print
-
 
           echo "--------------------------------"
           echo "DAT FILES"
@@ -460,7 +452,6 @@ jobs:
             exit 1
           fi
 
-
           echo "--------------------------------"
           echo "QUESTIONS JSON"
           echo "--------------------------------"
@@ -475,7 +466,7 @@ jobs:
 
 
       # ============================================================
-      # 10. FINAL ANDROID ENVIRONMENT CHECK
+      # 11. FINAL ANDROID ENVIRONMENT CHECK
       # ============================================================
 
       - name: Final Android environment check
@@ -483,7 +474,6 @@ jobs:
           set -euxo pipefail
 
           SDK_DIR="$HOME/.buildozer/android/platform/android-sdk"
-
           SDKMANAGER="$SDK_DIR/cmdline-tools/latest/bin/sdkmanager"
 
           echo "================================"
@@ -493,14 +483,9 @@ jobs:
           echo "SDK:"
           echo "$SDK_DIR"
 
-          echo "--------------------------------"
-
           test -d "$SDK_DIR"
-
           test -x "$SDKMANAGER"
-
-          test -x \
-            "$SDK_DIR/tools/bin/sdkmanager"
+          test -x "$SDK_DIR/tools/bin/sdkmanager"
 
           test -f \
             "$SDK_DIR/platforms/android-35/android.jar"
@@ -515,8 +500,6 @@ jobs:
             --sdk_root="$SDK_DIR" \
             --version
 
-          echo "--------------------------------"
-
           java -version
           python --version
           buildozer --version
@@ -527,7 +510,11 @@ jobs:
 
 
       # ============================================================
-      # 11. BUILD APK
+      # 12. BUILD APK
+      #
+      # 1-я попытка создаёт рабочие файлы p4a.
+      # Если она падает, проверяем конкретно ошибку -luuid.
+      # Затем удаляем -luuid и запускаем Buildozer повторно.
       # ============================================================
 
       - name: Build APK
@@ -535,16 +522,183 @@ jobs:
           set -o pipefail
 
           echo "================================"
-          echo "STARTING CLEAN APK BUILD"
+          echo "FIRST BUILD ATTEMPT"
           echo "================================"
 
-          buildozer -v android debug 2>&1 | tee build.log
+          set +e
+
+          buildozer -v android debug \
+            2>&1 | tee first-build.log
+
+          FIRST_RESULT=${PIPESTATUS[0]}
+
+          set -e
+
+          echo "================================"
+          echo "FIRST BUILD RESULT: $FIRST_RESULT"
+          echo "================================"
+
+          # --------------------------------------------------------
+          # Если APK уже успешно собран — вторая попытка не нужна
+          # --------------------------------------------------------
+
+          if [ "$FIRST_RESULT" -eq 0 ]; then
+
+            echo "FIRST BUILD SUCCESSFUL"
+
+            cp first-build.log build.log
+
+            exit 0
+
+          fi
+
+
+          # --------------------------------------------------------
+          # Проверяем, действительно ли присутствует ошибка -luuid
+          # --------------------------------------------------------
+
+          echo "================================"
+          echo "CHECKING FOR -luuid ERROR"
+          echo "================================"
+
+          if ! grep -q \
+            "unable to find library -luuid" \
+            first-build.log; then
+
+            echo "ERROR:"
+            echo "First build failed, but NOT because of -luuid."
+            echo "No automatic patch will be applied."
+
+            cp first-build.log build.log
+
+            exit "$FIRST_RESULT"
+
+          fi
+
+
+          echo "================================"
+          echo "-luuid ERROR CONFIRMED"
+          echo "================================"
+
+
+          # --------------------------------------------------------
+          # Показываем все ссылки на -luuid ДО исправления
+          # --------------------------------------------------------
+
+          echo "================================"
+          echo "UUID REFERENCES BEFORE PATCH"
+          echo "================================"
+
+          grep -R -n -- "-luuid" \
+            .buildozer/android/platform/build-* \
+            2>/dev/null \
+            | head -100 || true
+
+
+          # --------------------------------------------------------
+          # Применяем patch
+          # --------------------------------------------------------
+
+          echo "================================"
+          echo "PATCHING PYTHON UUID"
+          echo "================================"
+
+          python patches/patch_python_uuid.py
+
+
+          # --------------------------------------------------------
+          # Дополнительный проход по build-каталогам.
+          # Удаляем буквальный -luuid из текстовых build-файлов.
+          # --------------------------------------------------------
+
+          echo "================================"
+          echo "SECONDARY UUID CLEANUP"
+          echo "================================"
+
+          while IFS= read -r -d '' file; do
+
+            if grep -Iq . "$file" 2>/dev/null; then
+
+              if grep -q -- "-luuid" "$file" 2>/dev/null; then
+
+                echo "Cleaning: $file"
+
+                sed -i \
+                  's/-luuid//g' \
+                  "$file"
+
+              fi
+
+            fi
+
+          done < <(
+            find \
+              .buildozer/android/platform/build-* \
+              -type f \
+              -print0 \
+              2>/dev/null
+          )
+
+
+          # --------------------------------------------------------
+          # Проверяем, осталось ли -luuid
+          # --------------------------------------------------------
+
+          echo "================================"
+          echo "UUID REFERENCES AFTER PATCH"
+          echo "================================"
+
+          grep -R -n -- "-luuid" \
+            .buildozer/android/platform/build-* \
+            2>/dev/null \
+            | head -100 || true
+
+
+          # --------------------------------------------------------
+          # Вторая сборка
+          # --------------------------------------------------------
+
+          echo "================================"
+          echo "SECOND BUILD ATTEMPT"
+          echo "================================"
+
+          buildozer -v android debug \
+            2>&1 | tee second-build.log
+
+          SECOND_RESULT=${PIPESTATUS[0]}
+
+
+          # --------------------------------------------------------
+          # Объединяем оба лога
+          # --------------------------------------------------------
+
+          {
+            echo "================================================"
+            echo "FIRST BUILD"
+            echo "================================================"
+
+            cat first-build.log
+
+            echo
+            echo
+            echo "================================================"
+            echo "SECOND BUILD AFTER UUID PATCH"
+            echo "================================================"
+
+            cat second-build.log
+
+          } > build.log
+
+
+          echo "================================"
+          echo "SECOND BUILD RESULT: $SECOND_RESULT"
+          echo "================================"
+
+          exit "$SECOND_RESULT"
 
 
       # ============================================================
-      # 12. UPLOAD BUILD LOG
-      #
-      # Загружаем даже при ошибке сборки.
+      # 13. UPLOAD BUILD LOG
       # ============================================================
 
       - name: Upload build log
@@ -552,13 +706,16 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: build-log
-          path: build.log
+          path: |
+            build.log
+            first-build.log
+            second-build.log
           if-no-files-found: ignore
           retention-days: 7
 
 
       # ============================================================
-      # 13. SEARCH FOR APK
+      # 14. SEARCH FOR APK
       # ============================================================
 
       - name: Search for APK
@@ -576,7 +733,7 @@ jobs:
 
 
       # ============================================================
-      # 14. VERIFY APK
+      # 15. VERIFY APK
       # ============================================================
 
       - name: Verify APK
@@ -592,8 +749,11 @@ jobs:
           echo "APK files found: $APK_COUNT"
 
           if [ "$APK_COUNT" -eq 0 ]; then
+
             echo "ERROR: APK WAS NOT CREATED"
+
             exit 1
+
           fi
 
           find bin \
@@ -607,7 +767,7 @@ jobs:
 
 
       # ============================================================
-      # 15. RENAME APK
+      # 16. RENAME APK
       # ============================================================
 
       - name: Rename APK
@@ -621,13 +781,18 @@ jobs:
           APK_FILE=$(find bin -maxdepth 1 -type f -name "*.apk" | head -n 1)
 
           if [ -z "$APK_FILE" ]; then
+
             echo "ERROR: APK FILE NOT FOUND"
+
             exit 1
+
           fi
 
           NEW_APK="bin/TEST_OVIK_${{ github.run_number }}.apk"
 
-          mv "$APK_FILE" "$NEW_APK"
+          mv \
+            "$APK_FILE" \
+            "$NEW_APK"
 
           echo "Original APK:"
           echo "$APK_FILE"
@@ -643,7 +808,7 @@ jobs:
 
 
       # ============================================================
-      # 16. UPLOAD APK
+      # 17. UPLOAD APK
       # ============================================================
 
       - name: Upload APK
