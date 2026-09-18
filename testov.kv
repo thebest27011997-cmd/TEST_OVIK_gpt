@@ -1,25 +1,115 @@
 #:import dp kivy.metrics.dp
 
 
+# =========================================================
+# ОБЩИЕ НАСТРОЙКИ
+# =========================================================
+
 <Label>:
     font_name: 'AppArial'
     italic: False
 
-
 <Button>:
     font_name: 'AppArial'
     italic: False
-
 
 <ToggleButton>:
     font_name: 'AppArial'
     italic: False
 
 
+# =========================================================
+# СТРОКА ИСТОЧНИКА
+# Используется динамическим списком .dat
+# =========================================================
+
+<SourceRow@BoxLayout>:
+
+    source_id: ''
+    source_name: ''
+    selected: False
+
+    orientation: 'horizontal'
+
+    size_hint_y: None
+    height: max(dp(72), source_label.texture_size[1] + dp(24))
+
+    spacing: dp(8)
+    padding: dp(8), dp(6)
+
+    canvas.before:
+
+        Color:
+            rgba: .98, .97, .94, 1
+
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(8)]
+
+    canvas.after:
+
+        Color:
+            rgba: .55, .50, .44, 1
+
+        Line:
+            rounded_rectangle:
+                (self.x, self.y, self.width, self.height, dp(8))
+            width: 1
+
+    CheckBox:
+
+        size_hint_x: None
+        width: dp(42)
+
+        active: root.selected
+
+        color:
+            .20, .16, .12, 1
+
+        on_active:
+            app.root.get_screen('settings').set_source_selected(
+            root.source_id,
+            self.active
+            )
+
+    Label:
+
+        id: source_label
+
+        text: root.source_name
+
+        color:
+            .08, .07, .06, 1
+
+        font_size: '14sp'
+
+        bold: False
+
+        halign: 'left'
+        valign: 'middle'
+
+        text_size:
+            self.width, None
+
+        size_hint_y: None
+
+        height:
+            self.texture_size[1] + dp(16)
+
+
+# =========================================================
+# SCREEN MANAGER
+# =========================================================
+
 ScreenManager:
+
     Login:
+
     Test:
+
     Result:
+
     AdminSettings:
 
 
@@ -28,43 +118,71 @@ ScreenManager:
 # =========================================================
 
 <Login>:
+
     name: 'login'
 
     canvas.before:
+
         Color:
             rgba: .96, .92, .85, 1
+
         Rectangle:
             pos: self.pos
             size: self.size
 
     ScrollView:
+
         do_scroll_x: False
         do_scroll_y: True
 
         BoxLayout:
+
             orientation: 'vertical'
+
             size_hint_y: None
-            height: max(self.minimum_height, root.height)
+
+            height:
+                max(self.minimum_height, root.height)
 
             padding:
                 dp(28), dp(18), dp(28), dp(28)
 
             spacing: dp(12)
 
+
             Widget:
+
                 size_hint_y: None
                 height: dp(12)
 
+
+            # =================================================
+            # ЛОГО
+            # =================================================
+
             Image:
+
                 source: 'assets/logo.png'
+
                 size_hint_y: None
                 height: dp(125)
+
                 fit_mode: 'contain'
 
+
+            # =================================================
+            # НАЗВАНИЕ
+            # =================================================
+
             Label:
+
                 text: 'ТехПрофи'
-                color: .08, .07, .06, 1
+
+                color:
+                    .08, .07, .06, 1
+
                 font_size: '32sp'
+
                 bold: True
 
                 size_hint_y: None
@@ -72,11 +190,18 @@ ScreenManager:
 
                 halign: 'center'
                 valign: 'middle'
+
                 text_size: self.size
 
+
             Label:
-                text: 'Знания. Безопасность. Профессионализм.'
-                color: .22, .19, .16, 1
+
+                text:
+                    'Знания. Безопасность. Профессионализм.'
+
+                color:
+                    .22, .19, .16, 1
+
                 font_size: '14sp'
 
                 size_hint_y: None
@@ -84,31 +209,56 @@ ScreenManager:
 
                 halign: 'center'
                 valign: 'middle'
+
                 text_size: self.size
 
+
             Widget:
+
                 size_hint_y: None
                 height: dp(8)
 
+
+            # =================================================
+            # ФАМИЛИЯ И ИНИЦИАЛЫ
+            # =================================================
+
             TextInput:
+
                 id: name
 
-                hint_text: 'Фамилия и инициалы'
+                hint_text:
+                    'Фамилия и инициалы'
 
-                font_name: 'AppArial'
-                font_size: '18sp'
+                font_name:
+                    'AppArial'
 
-                multiline: False
+                font_size:
+                    '18sp'
 
-                size_hint_y: None
-                height: dp(58)
+                multiline:
+                    False
 
-                foreground_color: 0, 0, 0, 1
-                hint_text_color: .45, .45, .45, 1
+                size_hint_y:
+                    None
 
-                background_normal: ''
-                background_active: ''
-                background_color: 1, 1, 1, 1
+                height:
+                    dp(58)
+
+                foreground_color:
+                    0, 0, 0, 1
+
+                hint_text_color:
+                    .45, .45, .45, 1
+
+                background_normal:
+                    ''
+
+                background_active:
+                    ''
+
+                background_color:
+                    1, 1, 1, 1
 
                 padding:
                     [dp(14), (self.height - self.line_height) / 2 - dp(2)]
@@ -116,62 +266,120 @@ ScreenManager:
                 on_text:
                     root.update_admin_state()
 
+
             Label:
+
                 id: msg
 
                 text: ''
 
-                color: .75, .1, .1, 1
-                font_size: '14sp'
+                color:
+                    .75, .10, .10, 1
 
-                size_hint_y: None
-                height: dp(30) if self.text else 0
+                font_size:
+                    '14sp'
 
-                text_size: self.width, None
+                size_hint_y:
+                    None
 
-                halign: 'center'
-                valign: 'middle'
+                height:
+                    dp(30) if self.text else 0
+
+                text_size:
+                    self.width, None
+
+                halign:
+                    'center'
+
+                valign:
+                    'middle'
+
+
+            # =================================================
+            # КОНТРОЛЬ
+            # =================================================
 
             Button:
-                text: 'Контрольное тестирование'
 
-                color: .08, .07, .06, 1
-                font_size: '17sp'
+                text:
+                    'Контрольное тестирование'
 
-                background_normal: ''
-                background_down: ''
-                background_color: .83, .73, .61, 1
+                color:
+                    .08, .07, .06, 1
 
-                size_hint_y: None
-                height: dp(60)
+                font_size:
+                    '17sp'
+
+                background_normal:
+                    ''
+
+                background_down:
+                    ''
+
+                background_color:
+                    .83, .73, .61, 1
+
+                size_hint_y:
+                    None
+
+                height:
+                    dp(60)
 
                 on_release:
                     root.start('контроль')
 
+
+            # =================================================
+            # ОБУЧЕНИЕ
+            # =================================================
+
             Button:
-                text: 'Обучение'
 
-                color: .08, .07, .06, 1
-                font_size: '17sp'
+                text:
+                    'Обучение'
 
-                background_normal: ''
-                background_down: ''
-                background_color: .83, .73, .61, 1
+                color:
+                    .08, .07, .06, 1
 
-                size_hint_y: None
-                height: dp(60)
+                font_size:
+                    '17sp'
+
+                background_normal:
+                    ''
+
+                background_down:
+                    ''
+
+                background_color:
+                    .83, .73, .61, 1
+
+                size_hint_y:
+                    None
+
+                height:
+                    dp(60)
 
                 on_release:
                     root.start('обучение')
 
+
+            # =================================================
+            # НАСТРОЙКИ
+            # =================================================
+
             Button:
-                text: 'Настройки'
+
+                text:
+                    'Настройки'
 
                 color:
                     (.08, .07, .06, 1) if root.admin_enabled else (.42, .42, .42, 1)
 
-                background_normal: ''
-                background_down: ''
+                background_normal:
+                    ''
+
+                background_down:
+                    ''
 
                 background_color:
                     (.83, .73, .61, 1) if root.admin_enabled else (.70, .68, .64, 1)
@@ -179,13 +387,18 @@ ScreenManager:
                 disabled:
                     not root.admin_enabled
 
-                size_hint_y: None
-                height: dp(56)
+                size_hint_y:
+                    None
+
+                height:
+                    dp(56)
 
                 on_release:
                     root.open_settings()
 
+
             Widget:
+
                 size_hint_y: None
                 height: dp(18)
 
@@ -195,49 +408,69 @@ ScreenManager:
 # =========================================================
 
 <Test>:
+
     name: 'test'
 
     canvas.before:
+
         Color:
             rgba: .97, .96, .94, 1
+
         Rectangle:
             pos: self.pos
             size: self.size
 
+
     BoxLayout:
+
         orientation: 'vertical'
 
         padding:
             dp(14), dp(28), dp(14), dp(24)
 
-        spacing: dp(8)
+        spacing:
+            dp(8)
+
 
         # =================================================
         # ВЕРХНЯЯ ПАНЕЛЬ
         # =================================================
 
         BoxLayout:
+
             size_hint_y: None
             height: dp(54)
+
             spacing: dp(10)
 
+
             Label:
-                text: root.progress
 
-                color: .08, .07, .06, 1
-                font_size: '18sp'
+                text:
+                    root.progress
 
-                halign: 'left'
-                valign: 'middle'
+                color:
+                    .08, .07, .06, 1
 
-                text_size: self.size
+                font_size:
+                    '18sp'
 
-            # ---------------------------------------------
+                halign:
+                    'left'
+
+                valign:
+                    'middle'
+
+                text_size:
+                    self.size
+
+
+            # =================================================
             # ЦИФРОВОЙ ТАЙМЕР
-            # Только для контрольного тестирования
-            # ---------------------------------------------
+            # =================================================
 
             BoxLayout:
+
                 size_hint_x: None
 
                 width:
@@ -252,29 +485,44 @@ ScreenManager:
                 padding:
                     dp(4) if app.mode == 'контроль' else 0
 
+
                 canvas.before:
+
                     Color:
+
                         rgba:
                             (.12, .105, .09, 1) if app.mode == 'контроль' else (0, 0, 0, 0)
 
                     RoundedRectangle:
-                        pos: self.pos
-                        size: self.size
-                        radius: [dp(8)]
+
+                        pos:
+                            self.pos
+
+                        size:
+                            self.size
+
+                        radius:
+                            [dp(8)]
+
 
                 canvas.after:
+
                     Color:
+
                         rgba:
                             (.68, .55, .40, 1) if app.mode == 'контроль' else (0, 0, 0, 0)
 
                     Line:
+
                         rounded_rectangle:
                             (self.x, self.y, self.width, self.height, dp(8))
 
                         width:
                             1.2 if app.mode == 'контроль' else 0
 
+
                 Label:
+
                     text:
                         root.timer if app.mode == 'контроль' else ''
 
@@ -296,29 +544,49 @@ ScreenManager:
                     text_size:
                         self.size
 
+
         # =================================================
-        # ВОПРОС + ОТВЕТЫ + ИСТОЧНИК
+        # ВОПРОС / ОТВЕТЫ / ИСТОЧНИК
         # =================================================
 
         ScrollView:
-            id: question_scroll
 
-            do_scroll_x: False
-            do_scroll_y: True
+            id:
+                question_scroll
+
+            do_scroll_x:
+                False
+
+            do_scroll_y:
+                True
+
 
             BoxLayout:
-                orientation: 'vertical'
 
-                size_hint_y: None
-                height: self.minimum_height
+                orientation:
+                    'vertical'
 
-                spacing: dp(12)
+                size_hint_y:
+                    None
+
+                height:
+                    self.minimum_height
+
+                spacing:
+                    dp(12)
 
                 padding:
                     dp(4), dp(6), dp(4), dp(12)
 
+
+                # =================================================
+                # ВОПРОС
+                # =================================================
+
                 Label:
-                    text: root.question
+
+                    text:
+                        root.question
 
                     color:
                         .08, .07, .06, 1
@@ -341,26 +609,37 @@ ScreenManager:
                     valign:
                         'middle'
 
-                # -----------------------------------------
-                # Варианты ответа создаются из main.py
-                # -----------------------------------------
+
+                # =================================================
+                # ОТВЕТЫ
+                # =================================================
 
                 BoxLayout:
-                    id: answers
 
-                    orientation: 'vertical'
+                    id:
+                        answers
 
-                    size_hint_y: None
-                    height: self.minimum_height
+                    orientation:
+                        'vertical'
 
-                    spacing: dp(10)
+                    size_hint_y:
+                        None
 
-                # -----------------------------------------
-                # Сообщение / правильный ответ
-                # -----------------------------------------
+                    height:
+                        self.minimum_height
+
+                    spacing:
+                        dp(10)
+
+
+                # =================================================
+                # СООБЩЕНИЕ / ПРАВИЛЬНЫЙ ОТВЕТ
+                # =================================================
 
                 Label:
-                    text: root.message
+
+                    text:
+                        root.message
 
                     color:
                         .65, .15, .10, 1
@@ -383,12 +662,15 @@ ScreenManager:
                     valign:
                         'middle'
 
-                # =========================================
+
+                # =================================================
                 # ИСТОЧНИК
-                # =========================================
+                # =================================================
 
                 BoxLayout:
-                    orientation: 'vertical'
+
+                    orientation:
+                        'vertical'
 
                     size_hint_y:
                         None
@@ -405,17 +687,28 @@ ScreenManager:
                     spacing:
                         dp(8)
 
+
                     canvas.before:
+
                         Color:
+
                             rgba:
                                 (.94, .91, .86, 1) if root.source else (0, 0, 0, 0)
 
                         RoundedRectangle:
-                            pos: self.pos
-                            size: self.size
-                            radius: [dp(12)]
+
+                            pos:
+                                self.pos
+
+                            size:
+                                self.size
+
+                            radius:
+                                [dp(12)]
+
 
                     Label:
+
                         text:
                             'Источник' if root.source else ''
 
@@ -443,10 +736,9 @@ ScreenManager:
                         valign:
                             'middle'
 
-                    # СП / раздел / текст нормы
-                    # отображаются одинаковым шрифтом
 
                     Label:
+
                         text:
                             root.source
 
@@ -474,12 +766,15 @@ ScreenManager:
                         valign:
                             'top'
 
+
         # =================================================
-        # ЗАВЕРШЕНИЕ
+        # ЗАВЕРШИТЬ
         # =================================================
 
         Button:
-            text: 'Завершить тестирование'
+
+            text:
+                'Завершить тестирование'
 
             color:
                 .08, .07, .06, 1
@@ -487,8 +782,11 @@ ScreenManager:
             font_size:
                 '16sp'
 
-            background_normal: ''
-            background_down: ''
+            background_normal:
+                ''
+
+            background_down:
+                ''
 
             background_color:
                 .86, .72, .59, 1
@@ -502,18 +800,27 @@ ScreenManager:
             on_release:
                 root.finish()
 
+
         # =================================================
         # НАВИГАЦИЯ
         # =================================================
 
         BoxLayout:
-            size_hint_y: None
-            height: dp(58)
 
-            spacing: dp(10)
+            size_hint_y:
+                None
+
+            height:
+                dp(58)
+
+            spacing:
+                dp(10)
+
 
             Button:
-                text: 'Предыдущий'
+
+                text:
+                    'Предыдущий'
 
                 color:
                     .08, .07, .06, 1
@@ -521,8 +828,11 @@ ScreenManager:
                 font_size:
                     '15sp'
 
-                background_normal: ''
-                background_down: ''
+                background_normal:
+                    ''
+
+                background_down:
+                    ''
 
                 background_color:
                     .80, .80, .80, 1
@@ -533,12 +843,11 @@ ScreenManager:
                 on_release:
                     root.prev()
 
-            # ---------------------------------------------
-            # Ответ существует только в режиме обучения
-            # ---------------------------------------------
 
             Button:
-                text: 'Ответ'
+
+                text:
+                    'Ответ'
 
                 color:
                     .08, .07, .06, 1
@@ -546,8 +855,11 @@ ScreenManager:
                 font_size:
                     '15sp'
 
-                background_normal: ''
-                background_down: ''
+                background_normal:
+                    ''
+
+                background_down:
+                    ''
 
                 background_color:
                     .82, .76, .66, 1
@@ -567,8 +879,11 @@ ScreenManager:
                 on_release:
                     root.show_correct()
 
+
             Button:
-                text: 'Следующий'
+
+                text:
+                    'Следующий'
 
                 color:
                     .08, .07, .06, 1
@@ -576,8 +891,11 @@ ScreenManager:
                 font_size:
                     '15sp'
 
-                background_normal: ''
-                background_down: ''
+                background_normal:
+                    ''
+
+                background_down:
+                    ''
 
                 background_color:
                     .80, .80, .80, 1
@@ -585,10 +903,14 @@ ScreenManager:
                 on_release:
                     root.next()
 
-        # Безопасный нижний отступ Android
+
         Widget:
-            size_hint_y: None
-            height: dp(12)
+
+            size_hint_y:
+                None
+
+            height:
+                dp(12)
 
 
 # =========================================================
@@ -596,27 +918,39 @@ ScreenManager:
 # =========================================================
 
 <Result>:
-    name: 'result'
+
+    name:
+        'result'
 
     canvas.before:
+
         Color:
             rgba: .96, .92, .85, 1
+
         Rectangle:
             pos: self.pos
             size: self.size
 
+
     BoxLayout:
-        orientation: 'vertical'
+
+        orientation:
+            'vertical'
 
         padding:
             dp(28), dp(34), dp(28), dp(34)
 
-        spacing: dp(18)
+        spacing:
+            dp(18)
+
 
         Widget:
 
+
         Label:
-            text: root.text
+
+            text:
+                root.text
 
             color:
                 .08, .07, .06, 1
@@ -633,8 +967,11 @@ ScreenManager:
             text_size:
                 self.width, None
 
+
         Button:
-            text: 'На главный экран'
+
+            text:
+                'На главный экран'
 
             color:
                 .08, .07, .06, 1
@@ -642,8 +979,11 @@ ScreenManager:
             font_size:
                 '16sp'
 
-            background_normal: ''
-            background_down: ''
+            background_normal:
+                ''
+
+            background_down:
+                ''
 
             background_color:
                 .83, .73, .61, 1
@@ -657,6 +997,7 @@ ScreenManager:
             on_release:
                 app.root.current = 'login'
 
+
         Widget:
 
 
@@ -665,34 +1006,49 @@ ScreenManager:
 # =========================================================
 
 <AdminSettings>:
-    name: 'settings'
+
+    name:
+        'settings'
 
     canvas.before:
+
         Color:
             rgba: .96, .92, .85, 1
+
         Rectangle:
             pos: self.pos
             size: self.size
 
+
     BoxLayout:
-        orientation: 'vertical'
+
+        orientation:
+            'vertical'
 
         padding:
-            dp(20), dp(28), dp(20), dp(24)
+            dp(18), dp(24), dp(18), dp(20)
 
         spacing:
             dp(10)
+
 
         # =================================================
         # HEADER
         # =================================================
 
         BoxLayout:
-            size_hint_y: None
-            height: dp(52)
+
+            size_hint_y:
+                None
+
+            height:
+                dp(52)
+
 
             Button:
-                text: '‹'
+
+                text:
+                    '‹'
 
                 font_size:
                     '30sp'
@@ -700,8 +1056,11 @@ ScreenManager:
                 color:
                     .08, .07, .06, 1
 
-                background_normal: ''
-                background_down: ''
+                background_normal:
+                    ''
+
+                background_down:
+                    ''
 
                 background_color:
                     0, 0, 0, 0
@@ -710,19 +1069,22 @@ ScreenManager:
                     None
 
                 width:
-                    dp(50)
+                    dp(48)
 
                 on_release:
                     root.go_back()
 
+
             Label:
-                text: 'Настройки'
+
+                text:
+                    'Настройки'
 
                 color:
                     .08, .07, .06, 1
 
                 font_size:
-                    '26sp'
+                    '25sp'
 
                 bold:
                     True
@@ -736,36 +1098,55 @@ ScreenManager:
                 text_size:
                     self.size
 
+
             Widget:
-                size_hint_x: None
-                width: dp(50)
+
+                size_hint_x:
+                    None
+
+                width:
+                    dp(48)
+
 
         # =================================================
-        # ПРОКРУЧИВАЕМАЯ ЧАСТЬ
+        # ОСНОВНАЯ ПРОКРУТКА
         # =================================================
 
         ScrollView:
-            do_scroll_x: False
-            do_scroll_y: True
+
+            do_scroll_x:
+                False
+
+            do_scroll_y:
+                True
+
 
             BoxLayout:
-                orientation: 'vertical'
 
-                size_hint_y: None
-                height: self.minimum_height
+                orientation:
+                    'vertical'
+
+                size_hint_y:
+                    None
+
+                height:
+                    self.minimum_height
 
                 spacing:
-                    dp(14)
+                    dp(12)
 
                 padding:
-                    dp(2), dp(8), dp(2), dp(18)
+                    dp(2), dp(6), dp(2), dp(20)
 
-                # =========================================
+
+                # =================================================
                 # ИСТОЧНИКИ
-                # =========================================
+                # =================================================
 
                 Label:
-                    text: 'Источники вопросов'
+
+                    text:
+                        'Источники вопросов'
 
                     color:
                         .08, .07, .06, 1
@@ -791,18 +1172,48 @@ ScreenManager:
                     valign:
                         'middle'
 
-                # -----------------------------------------
-                # Выбрать все
-                # -----------------------------------------
 
-                BoxLayout:
-                    orientation: 'horizontal'
+                Label:
+
+                    text:
+                        'Выберите нормативные документы, из которых будут формироваться вопросы.'
+
+                    color:
+                        .35, .32, .28, 1
+
+                    font_size:
+                        '13sp'
 
                     size_hint_y:
                         None
 
                     height:
-                        dp(50)
+                        self.texture_size[1] + dp(8)
+
+                    text_size:
+                        self.width, None
+
+                    halign:
+                        'left'
+
+                    valign:
+                        'top'
+
+
+                # =================================================
+                # ВЫБРАТЬ ВСЕ
+                # =================================================
+
+                BoxLayout:
+
+                    orientation:
+                        'horizontal'
+
+                    size_hint_y:
+                        None
+
+                    height:
+                        dp(52)
 
                     spacing:
                         dp(8)
@@ -810,17 +1221,28 @@ ScreenManager:
                     padding:
                         dp(8), 0
 
+
                     canvas.before:
+
                         Color:
-                            rgba: .93, .89, .82, 1
+                            rgba: .91, .86, .78, 1
 
                         RoundedRectangle:
-                            pos: self.pos
-                            size: self.size
-                            radius: [dp(8)]
+
+                            pos:
+                                self.pos
+
+                            size:
+                                self.size
+
+                            radius:
+                                [dp(8)]
+
 
                     CheckBox:
-                        id: all_sources
+
+                        id:
+                            all_sources
 
                         size_hint_x:
                             None
@@ -829,12 +1251,18 @@ ScreenManager:
                             dp(44)
 
                         active:
-                            len(app.available_sources) > 0 and len(app.selected_sources) == len(app.available_sources)
+                            root.all_sources_selected()
+
+                        color:
+                            .20, .16, .12, 1
 
                         on_active:
-                            root.select_all_sources() if self.active else root.clear_all_sources()
+
+                            if self.active: root.select_all_sources()
+
 
                     Label:
+
                         text:
                             'Выбрать все'
 
@@ -856,108 +1284,80 @@ ScreenManager:
                         text_size:
                             self.size
 
-                # -----------------------------------------
-                # ТЕКУЩИЙ БАНК
-                #
-                # Сейчас questions.json содержит один
-                # bank_name. Когда добавятся другие банки,
-                # блок расширим динамическим списком.
-                # -----------------------------------------
 
-                BoxLayout:
-                    orientation: 'horizontal'
+                # =================================================
+                # ДИНАМИЧЕСКИЙ СПИСОК .DAT
+                # =================================================
+
+                RecycleView:
+
+                    id:
+                        source_list
 
                     size_hint_y:
                         None
 
                     height:
-                        max(dp(76), source_name.texture_size[1] + dp(24))
+                        min(dp(430), max(dp(80), source_layout.minimum_height))
 
-                    spacing:
-                        dp(8)
+                    viewclass:
+                        'SourceRow'
 
-                    padding:
-                        dp(8), dp(8)
+                    data:
+                        [{'source_id': item['id'], 'source_name': item['name'], 'selected': item['selected']} for item in root.get_sources()]
 
-                    canvas.before:
-                        Color:
-                            rgba: .98, .97, .94, 1
+                    bar_width:
+                        dp(6)
 
-                        RoundedRectangle:
-                            pos: self.pos
-                            size: self.size
-                            radius: [dp(8)]
+                    scroll_type:
+                        ['bars', 'content']
 
-                    canvas.after:
-                        Color:
-                            rgba: .45, .40, .34, 1
 
-                        Line:
-                            rounded_rectangle:
-                                (self.x, self.y, self.width, self.height, dp(8))
+                    RecycleBoxLayout:
 
-                            width:
-                                1
+                        id:
+                            source_layout
 
-                    CheckBox:
-                        id: current_source
+                        default_size:
+                            None, dp(78)
 
-                        size_hint_x:
-                            None
-
-                        width:
-                            dp(44)
-
-                        active:
-                            app.bank_name in app.selected_sources
-
-                        on_active:
-                            root.set_source_selected(app.bank_name, self.active)
-
-                    Label:
-                        id: source_name
-
-                        text:
-                            root.get_sources()[0]['name'] if root.get_sources() else ''
-
-                        color:
-                            .08, .07, .06, 1
-
-                        font_size:
-                            '15sp'
-
-                        bold:
-                            False
-
-                        text_size:
-                            self.width, None
-
-                        halign:
-                            'left'
-
-                        valign:
-                            'middle'
+                        default_size_hint:
+                            1, None
 
                         size_hint_y:
                             None
 
                         height:
-                            self.texture_size[1] + dp(16)
+                            self.minimum_height
 
-                # =========================================
+                        orientation:
+                            'vertical'
+
+                        spacing:
+                            dp(7)
+
+
+                # =================================================
                 # РАЗДЕЛИТЕЛЬ
-                # =========================================
+                # =================================================
 
                 Widget:
-                    size_hint_y: None
-                    height: dp(4)
 
-                # =========================================
+                    size_hint_y:
+                        None
+
+                    height:
+                        dp(8)
+
+
+                # =================================================
                 # КОЛИЧЕСТВО ВОПРОСОВ
-                # =========================================
+                # =================================================
 
                 Label:
-                    text: 'Количество вопросов'
+
+                    text:
+                        'Количество вопросов'
 
                     color:
                         .08, .07, .06, 1
@@ -983,8 +1383,11 @@ ScreenManager:
                     valign:
                         'middle'
 
+
                 TextInput:
-                    id: question_count
+
+                    id:
+                        question_count
 
                     text:
                         str(int(app.question_count))
@@ -1025,9 +1428,11 @@ ScreenManager:
                     padding:
                         dp(14), dp(14)
 
+
                 Label:
+
                     text:
-                        'Сколько вопросов будет случайно выбрано для контрольного тестирования.'
+                        'Количество вопросов в контрольном тестировании.'
 
                     color:
                         .35, .32, .28, 1
@@ -1047,12 +1452,15 @@ ScreenManager:
                     halign:
                         'left'
 
-                # =========================================
+
+                # =================================================
                 # ВРЕМЯ
-                # =========================================
+                # =================================================
 
                 Label:
-                    text: 'Время тестирования, минут'
+
+                    text:
+                        'Время тестирования, минут'
 
                     color:
                         .08, .07, .06, 1
@@ -1078,8 +1486,11 @@ ScreenManager:
                     valign:
                         'middle'
 
+
                 TextInput:
-                    id: test_minutes
+
+                    id:
+                        test_minutes
 
                     text:
                         str(int(app.test_minutes))
@@ -1120,9 +1531,11 @@ ScreenManager:
                     padding:
                         dp(14), dp(14)
 
+
                 Label:
+
                     text:
-                        'Используется только в режиме контрольного тестирования.'
+                        'Таймер применяется только в режиме контрольного тестирования.'
 
                     color:
                         .35, .32, .28, 1
@@ -1142,12 +1555,15 @@ ScreenManager:
                     halign:
                         'left'
 
-                # =========================================
-                # ПРОХОДНОЙ ПРОЦЕНТ
-                # =========================================
+
+                # =================================================
+                # ПРОХОДНОЙ БАЛЛ
+                # =================================================
 
                 Label:
-                    text: 'Условие успешного прохождения, %'
+
+                    text:
+                        'Условие успешного прохождения, %'
 
                     color:
                         .08, .07, .06, 1
@@ -1173,8 +1589,11 @@ ScreenManager:
                     valign:
                         'middle'
 
+
                 TextInput:
-                    id: pass_percent
+
+                    id:
+                        pass_percent
 
                     text:
                         str(int(app.pass_percent))
@@ -1215,9 +1634,11 @@ ScreenManager:
                     padding:
                         dp(14), dp(14)
 
+
                 Label:
+
                     text:
-                        'Например: 80 означает, что для успешного прохождения необходимо дать не менее 80% правильных ответов.'
+                        'Например: 80 означает, что необходимо правильно ответить минимум на 80% вопросов.'
 
                     color:
                         .35, .32, .28, 1
@@ -1237,11 +1658,13 @@ ScreenManager:
                     halign:
                         'left'
 
-                # =========================================
+
+                # =================================================
                 # СООБЩЕНИЕ
-                # =========================================
+                # =================================================
 
                 Label:
+
                     text:
                         root.message
 
@@ -1266,11 +1689,13 @@ ScreenManager:
                     valign:
                         'middle'
 
-                # =========================================
+
+                # =================================================
                 # СОХРАНИТЬ
-                # =========================================
+                # =================================================
 
                 Button:
+
                     text:
                         'Сохранить настройки'
 
@@ -1299,13 +1724,16 @@ ScreenManager:
                         dp(60)
 
                     on_release:
+
                         root.save_settings(
                         question_count.text,
                         test_minutes.text,
                         pass_percent.text
                         )
 
+
                 Button:
+
                     text:
                         'Назад'
 
@@ -1333,6 +1761,11 @@ ScreenManager:
                     on_release:
                         root.go_back()
 
+
                 Widget:
-                    size_hint_y: None
-                    height: dp(18)
+
+                    size_hint_y:
+                        None
+
+                    height:
+                        dp(18)
