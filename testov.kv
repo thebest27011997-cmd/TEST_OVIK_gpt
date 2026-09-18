@@ -9,9 +9,11 @@
     font_name: 'AppArial'
     italic: False
 
+
 <Button>:
     font_name: 'AppArial'
     italic: False
+
 
 <ToggleButton>:
     font_name: 'AppArial'
@@ -19,107 +21,10 @@
 
 
 # =========================================================
-# СТРОКА ИСТОЧНИКА
-# Используется динамическим списком .dat
-# =========================================================
-
-<SourceRow@BoxLayout>:
-
-    source_id: ''
-    source_name: ''
-    selected: False
-
-    orientation: 'horizontal'
-
-    size_hint_y: None
-    height: max(dp(72), source_label.texture_size[1] + dp(24))
-
-    spacing: dp(8)
-    padding: dp(8), dp(6)
-
-    canvas.before:
-
-        Color:
-            rgba: .98, .97, .94, 1
-
-        RoundedRectangle:
-            pos: self.pos
-            size: self.size
-            radius: [dp(8)]
-
-    canvas.after:
-
-        Color:
-            rgba: .55, .50, .44, 1
-
-        Line:
-            rounded_rectangle:
-                (self.x, self.y, self.width, self.height, dp(8))
-            width: 1
-
-    CheckBox:
-
-        size_hint_x: None
-        width: dp(42)
-
-        active: root.selected
-
-        color:
-            .20, .16, .12, 1
-
-        on_active:
-            app.root.get_screen('settings').set_source_selected(
-            root.source_id,
-            self.active
-            )
-
-    Label:
-
-        id: source_label
-
-        text: root.source_name
-
-        color:
-            .08, .07, .06, 1
-
-        font_size: '14sp'
-
-        bold: False
-
-        halign: 'left'
-        valign: 'middle'
-
-        text_size:
-            self.width, None
-
-        size_hint_y: None
-
-        height:
-            self.texture_size[1] + dp(16)
-
-
-# =========================================================
-# SCREEN MANAGER
-# =========================================================
-
-ScreenManager:
-
-    Login:
-
-    Test:
-
-    Result:
-
-    AdminSettings:
-
-
-# =========================================================
 # ГЛАВНЫЙ ЭКРАН
 # =========================================================
 
 <Login>:
-
-    name: 'login'
 
     canvas.before:
 
@@ -130,10 +35,12 @@ ScreenManager:
             pos: self.pos
             size: self.size
 
+
     ScrollView:
 
         do_scroll_x: False
         do_scroll_y: True
+
 
         BoxLayout:
 
@@ -147,7 +54,8 @@ ScreenManager:
             padding:
                 dp(28), dp(18), dp(28), dp(28)
 
-            spacing: dp(12)
+            spacing:
+                dp(12)
 
 
             Widget:
@@ -157,7 +65,7 @@ ScreenManager:
 
 
             # =================================================
-            # ЛОГО
+            # ЭМБЛЕМА
             # =================================================
 
             Image:
@@ -194,6 +102,10 @@ ScreenManager:
                 text_size: self.size
 
 
+            # =================================================
+            # ДЕВИЗ
+            # =================================================
+
             Label:
 
                 text:
@@ -220,7 +132,7 @@ ScreenManager:
 
 
             # =================================================
-            # ФАМИЛИЯ И ИНИЦИАЛЫ
+            # ФИО
             # =================================================
 
             TextInput:
@@ -267,6 +179,10 @@ ScreenManager:
                     root.update_admin_state()
 
 
+            # =================================================
+            # СООБЩЕНИЕ
+            # =================================================
+
             Label:
 
                 id: msg
@@ -296,7 +212,7 @@ ScreenManager:
 
 
             # =================================================
-            # КОНТРОЛЬ
+            # КОНТРОЛЬНОЕ ТЕСТИРОВАНИЕ
             # =================================================
 
             Button:
@@ -409,8 +325,6 @@ ScreenManager:
 
 <Test>:
 
-    name: 'test'
-
     canvas.before:
 
         Color:
@@ -441,7 +355,8 @@ ScreenManager:
             size_hint_y: None
             height: dp(54)
 
-            spacing: dp(10)
+            spacing:
+                dp(10)
 
 
             Label:
@@ -466,7 +381,8 @@ ScreenManager:
 
 
             # =================================================
-            # ЦИФРОВОЙ ТАЙМЕР
+            # ТАЙМЕР В ВИДЕ ЦИФРОВЫХ ЧАСОВ
+            # В ОБУЧЕНИИ СКРЫТ
             # =================================================
 
             BoxLayout:
@@ -611,7 +527,8 @@ ScreenManager:
 
 
                 # =================================================
-                # ОТВЕТЫ
+                # ВАРИАНТЫ ОТВЕТОВ
+                # Создаются из main.py
                 # =================================================
 
                 BoxLayout:
@@ -665,6 +582,7 @@ ScreenManager:
 
                 # =================================================
                 # ИСТОЧНИК
+                # Показывается в режиме обучения после ответа
                 # =================================================
 
                 BoxLayout:
@@ -737,6 +655,11 @@ ScreenManager:
                             'middle'
 
 
+                    # -------------------------------------------------
+                    # Документ / раздел / текст нормы
+                    # одинаковый шрифт
+                    # -------------------------------------------------
+
                     Label:
 
                         text:
@@ -768,7 +691,7 @@ ScreenManager:
 
 
         # =================================================
-        # ЗАВЕРШИТЬ
+        # ЗАВЕРШИТЬ ТЕСТИРОВАНИЕ
         # =================================================
 
         Button:
@@ -817,6 +740,10 @@ ScreenManager:
                 dp(10)
 
 
+            # -------------------------------------------------
+            # ПРЕДЫДУЩИЙ
+            # -------------------------------------------------
+
             Button:
 
                 text:
@@ -843,6 +770,11 @@ ScreenManager:
                 on_release:
                     root.prev()
 
+
+            # -------------------------------------------------
+            # ОТВЕТ
+            # Только в режиме обучения
+            # -------------------------------------------------
 
             Button:
 
@@ -880,6 +812,10 @@ ScreenManager:
                     root.show_correct()
 
 
+            # -------------------------------------------------
+            # СЛЕДУЮЩИЙ
+            # -------------------------------------------------
+
             Button:
 
                 text:
@@ -904,6 +840,7 @@ ScreenManager:
                     root.next()
 
 
+        # Нижний безопасный отступ Android
         Widget:
 
             size_hint_y:
@@ -918,9 +855,6 @@ ScreenManager:
 # =========================================================
 
 <Result>:
-
-    name:
-        'result'
 
     canvas.before:
 
@@ -1007,9 +941,6 @@ ScreenManager:
 
 <AdminSettings>:
 
-    name:
-        'settings'
-
     canvas.before:
 
         Color:
@@ -1033,7 +964,7 @@ ScreenManager:
 
 
         # =================================================
-        # HEADER
+        # ЗАГОЛОВОК
         # =================================================
 
         BoxLayout:
@@ -1109,7 +1040,7 @@ ScreenManager:
 
 
         # =================================================
-        # ОСНОВНАЯ ПРОКРУТКА
+        # ПРОКРУЧИВАЕМАЯ ОБЛАСТЬ
         # =================================================
 
         ScrollView:
@@ -1140,7 +1071,7 @@ ScreenManager:
 
 
                 # =================================================
-                # ИСТОЧНИКИ
+                # ИСТОЧНИКИ ВОПРОСОВ
                 # =================================================
 
                 Label:
@@ -1250,15 +1181,11 @@ ScreenManager:
                         width:
                             dp(44)
 
-                        active:
-                            root.all_sources_selected()
-
                         color:
                             .20, .16, .12, 1
 
                         on_active:
-
-                            if self.active: root.select_all_sources()
+                            root.toggle_all_sources(self.active)
 
 
                     Label:
@@ -1286,60 +1213,29 @@ ScreenManager:
 
 
                 # =================================================
-                # ДИНАМИЧЕСКИЙ СПИСОК .DAT
+                # СПИСОК .DAT
+                #
+                # main.py автоматически создаёт здесь:
+                # CheckBox + полное название документа
                 # =================================================
 
-                RecycleView:
+                BoxLayout:
 
                     id:
-                        source_list
+                        sources_box
+
+                    orientation:
+                        'vertical'
 
                     size_hint_y:
                         None
 
                     height:
-                        min(dp(430), max(dp(80), source_layout.minimum_height))
+                        self.minimum_height
 
-                    viewclass:
-                        'SourceRow'
+                    spacing:
+                        dp(7)
 
-                    data:
-                        [{'source_id': item['id'], 'source_name': item['name'], 'selected': item['selected']} for item in root.get_sources()]
-
-                    bar_width:
-                        dp(6)
-
-                    scroll_type:
-                        ['bars', 'content']
-
-
-                    RecycleBoxLayout:
-
-                        id:
-                            source_layout
-
-                        default_size:
-                            None, dp(78)
-
-                        default_size_hint:
-                            1, None
-
-                        size_hint_y:
-                            None
-
-                        height:
-                            self.minimum_height
-
-                        orientation:
-                            'vertical'
-
-                        spacing:
-                            dp(7)
-
-
-                # =================================================
-                # РАЗДЕЛИТЕЛЬ
-                # =================================================
 
                 Widget:
 
@@ -1557,7 +1453,7 @@ ScreenManager:
 
 
                 # =================================================
-                # ПРОХОДНОЙ БАЛЛ
+                # УСПЕШНОЕ ПРОХОЖДЕНИЕ
                 # =================================================
 
                 Label:
@@ -1660,7 +1556,7 @@ ScreenManager:
 
 
                 # =================================================
-                # СООБЩЕНИЕ
+                # СООБЩЕНИЕ О СОХРАНЕНИИ
                 # =================================================
 
                 Label:
@@ -1731,6 +1627,10 @@ ScreenManager:
                         pass_percent.text
                         )
 
+
+                # =================================================
+                # НАЗАД
+                # =================================================
 
                 Button:
 
