@@ -508,18 +508,258 @@ jobs:
           echo "ENVIRONMENT READY"
           echo "================================"
 
-
       # ============================================================
       # 12. BUILD APK
       #
-      # 1-я попытка создаёт рабочие файлы p4a.
-      # Если она падает, проверяем конкретно ошибку -luuid.
-      # Затем удаляем -luuid и запускаем Buildozer повторно.
+      # 1. Запускаем обычную сборку.
+      #
+      # 2. Если возникает старая ошибка -luuid:
+      #    применяем уже проверенный UUID patch
+      #    и запускаем сборку повторно.
+      #
+      # 3. Если возникает:
+      #       ValueError: name is too long
+      #    автоматически анализируем содержимое
+      #    .buildozer/android/app и выводим самые длинные
+      #    имена/пути.
+      #
+      # Никакие .dat здесь НЕ переименовываются.
       # ============================================================
 
       - name: Build APK
         run: |
           set -o pipefail
+
+          diagnose_long_names() {
+
+            echo
+            echo "================================================"
+            echo "DIAGNOSIS: NAME IS TOO LONG"
+            echo "================================================"
+
+            python - <<'PY'
+          from pathlib import Path
+          import os
+
+          roots = [
+              Path(".buildozer/android/app"),
+          ]
+
+          found_root = False
+
+          for root in roots:
+
+              if not root.exists():
+                  continue
+
+              found_root = True
+
+              print()
+              print("=" * 70)
+              print("ANALYSING:", root)
+              print("=" * 70)
+
+              records = []
+
+              for path in root.rglob("*"):
+
+                  try:
+                      relative = path.relative_to(root)
+                  except Exception:
+                      continue
+
+                  rel_string = str(relative)
+                  full_string = str(path)
+
+                  name_chars = len(path.name)
+                  name_bytes = len(
+                      path.name.encode("utf-8")
+                  )
+
+                  rel_chars = len(rel_string)
+                  rel_bytes = len(
+                      rel_string.encode("utf-8")
+                  )
+
+                  full_chars = len(full_string)
+                  full_bytes = len(
+                      full_string.encode("utf-8")
+                  )
+
+                  records.append(
+                      (
+                          rel_bytes,
+                          name_bytes,
+                          rel_chars,
+                          name_chars,
+                          full_bytes,
+                          full_chars,
+                          str(path),
+                      )
+                  )
+
+              records.sort(
+                  key=lambda item: item[0],
+                  reverse=True,
+              )
+
+              print()
+              print("TOP 100 LONGEST RELATIVE PATHS")
+              print()
+
+              for record in records[:100]:
+
+                  (
+                      rel_bytes,
+                      name_bytes,
+                      rel_chars,
+                      name_chars,
+                      full_bytes,
+                      full_chars,
+                      path,
+                  ) = record
+
+                  print(
+                      f"REL={rel_bytes:4} bytes | "
+                      f"NAME={name_bytes:4} bytes | "
+                      f"FULL={full_bytes:4} bytes | "
+                      f"{path}"
+                  )
+
+              print()
+              print("=" * 70)
+              print("SUSPICIOUS USTAR NAMES")
+              print("=" * 70)
+              print()
+
+              suspicious = []
+
+              for record in records:
+
+                  (
+                      rel_bytes,
+                      name_bytes,
+                      rel_chars,
+                      name_chars,
+                      full_bytes,
+                      full_chars,
+                      path,
+                  ) = record
+
+                  # USTAR name/prefix limitations make long
+                  # path components especially interesting.
+                  if name_bytes > 100 or rel_bytes > 100:
+
+                      suspicious.append(record)
+
+                      print(
+                          f"REL={rel_bytes:4} bytes | "
+                          f"NAME={name_bytes:4} bytes | "
+                          f"{path}"
+                      )
+
+              print()
+              print(
+                  "Suspicious entries:",
+                  len(suspicious)
+              )
+
+              print()
+              print("=" * 70)
+              print("LONGEST FILE NAMES ONLY")
+              print("=" * 70)
+              print()
+
+              by_name = sorted(
+                  records,
+                  key=lambda item: item[1],
+                  reverse=True,
+              )
+
+              for record in by_name[:50]:
+
+                  (
+                      rel_bytes,
+                      name_bytes,
+                      rel_chars,
+                      name_chars,
+                      full_bytes,
+                      full_chars,
+                      path,
+                  ) = record
+
+                  print(
+                      f"NAME={name_bytes:4} bytes | "
+                      f"REL={rel_bytes:4} bytes | "
+                      f"{path}"
+                  )
+
+          if not found_root:
+
+              print(
+                  "WARNING: "
+                  ".buildozer/android/app was not found."
+              )
+
+          print()
+          print("=" * 70)
+          print("PROJECT DATA FILES")
+          print("=" * 70)
+          print()
+
+          data = Path("data")
+
+          if data.exists():
+
+              files = []
+
+              for path in data.iterdir():
+
+                  if not path.is_file():
+                      continue
+
+                  name_bytes = len(
+                      path.name.encode("utf-8")
+                  )
+
+                  path_bytes = len(
+                      str(path).encode("utf-8")
+                  )
+
+                  files.append(
+                      (
+                          name_bytes,
+                          path_bytes,
+                          str(path),
+                      )
+                  )
+
+              files.sort(reverse=True)
+
+              for (
+                  name_bytes,
+                  path_bytes,
+                  path,
+              ) in files:
+
+                  print(
+                      f"NAME={name_bytes:4} bytes | "
+                      f"PATH={path_bytes:4} bytes | "
+                      f"{path}"
+                  )
+
+          else:
+
+              print("data directory not found")
+
+          PY
+
+            echo
+            echo "================================================"
+            echo "END OF LONG NAME DIAGNOSIS"
+            echo "================================================"
+          }
+
 
           echo "================================"
           echo "FIRST BUILD ATTEMPT"
@@ -538,8 +778,9 @@ jobs:
           echo "FIRST BUILD RESULT: $FIRST_RESULT"
           echo "================================"
 
+
           # --------------------------------------------------------
-          # Если APK уже успешно собран — вторая попытка не нужна
+          # УСПЕШНАЯ ПЕРВАЯ СБОРКА
           # --------------------------------------------------------
 
           if [ "$FIRST_RESULT" -eq 0 ]; then
@@ -554,7 +795,30 @@ jobs:
 
 
           # --------------------------------------------------------
-          # Проверяем, действительно ли присутствует ошибка -luuid
+          # НОВАЯ ОШИБКА:
+          # ValueError: name is too long
+          # --------------------------------------------------------
+
+          if grep -q \
+            "ValueError: name is too long" \
+            first-build.log; then
+
+            echo
+            echo "================================"
+            echo "NAME TOO LONG ERROR CONFIRMED"
+            echo "================================"
+
+            diagnose_long_names
+
+            cp first-build.log build.log
+
+            exit "$FIRST_RESULT"
+
+          fi
+
+
+          # --------------------------------------------------------
+          # СТАРАЯ ОШИБКА -luuid
           # --------------------------------------------------------
 
           echo "================================"
@@ -566,7 +830,7 @@ jobs:
             first-build.log; then
 
             echo "ERROR:"
-            echo "First build failed, but NOT because of -luuid."
+            echo "First build failed for another reason."
             echo "No automatic patch will be applied."
 
             cp first-build.log build.log
@@ -582,7 +846,7 @@ jobs:
 
 
           # --------------------------------------------------------
-          # Показываем все ссылки на -luuid ДО исправления
+          # ССЫЛКИ НА -luuid ДО PATCH
           # --------------------------------------------------------
 
           echo "================================"
@@ -596,7 +860,7 @@ jobs:
 
 
           # --------------------------------------------------------
-          # Применяем patch
+          # UUID PATCH
           # --------------------------------------------------------
 
           echo "================================"
@@ -607,8 +871,7 @@ jobs:
 
 
           # --------------------------------------------------------
-          # Дополнительный проход по build-каталогам.
-          # Удаляем буквальный -luuid из текстовых build-файлов.
+          # ДОПОЛНИТЕЛЬНАЯ ОЧИСТКА -luuid
           # --------------------------------------------------------
 
           echo "================================"
@@ -641,7 +904,7 @@ jobs:
 
 
           # --------------------------------------------------------
-          # Проверяем, осталось ли -luuid
+          # ПРОВЕРКА ПОСЛЕ PATCH
           # --------------------------------------------------------
 
           echo "================================"
@@ -655,21 +918,25 @@ jobs:
 
 
           # --------------------------------------------------------
-          # Вторая сборка
+          # ВТОРАЯ СБОРКА
           # --------------------------------------------------------
 
           echo "================================"
           echo "SECOND BUILD ATTEMPT"
           echo "================================"
 
+          set +e
+
           buildozer -v android debug \
             2>&1 | tee second-build.log
 
           SECOND_RESULT=${PIPESTATUS[0]}
 
+          set -e
+
 
           # --------------------------------------------------------
-          # Объединяем оба лога
+          # ОБЪЕДИНЯЕМ ЛОГИ
           # --------------------------------------------------------
 
           {
@@ -681,6 +948,7 @@ jobs:
 
             echo
             echo
+
             echo "================================================"
             echo "SECOND BUILD AFTER UUID PATCH"
             echo "================================================"
@@ -694,8 +962,26 @@ jobs:
           echo "SECOND BUILD RESULT: $SECOND_RESULT"
           echo "================================"
 
-          exit "$SECOND_RESULT"
 
+          # --------------------------------------------------------
+          # ЕСЛИ ПОСЛЕ UUID PATCH ПОЛУЧИЛИ NAME TOO LONG
+          # --------------------------------------------------------
+
+          if grep -q \
+            "ValueError: name is too long" \
+            second-build.log; then
+
+            echo
+            echo "================================"
+            echo "NAME TOO LONG AFTER UUID PATCH"
+            echo "================================"
+
+            diagnose_long_names
+
+          fi
+
+
+          exit "$SECOND_RESULT"
 
       # ============================================================
       # 13. UPLOAD BUILD LOG
