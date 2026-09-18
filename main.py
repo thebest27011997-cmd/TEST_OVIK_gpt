@@ -23,12 +23,12 @@ from kivy.uix.screenmanager import Screen
 from kivy.uix.textinput import TextInput
 from kivy.uix.togglebutton import ToggleButton
 
+
 # =========================================================
 # ПУТИ И НАСТРОЙКИ
 # =========================================================
 
 BASE = Path(__file__).resolve().parent
-
 resource_add_path(str(BASE))
 
 FONT_PATH = BASE / "fonts" / "Arial.ttf"
@@ -58,41 +58,25 @@ LabelBase.register(
 
 
 # =========================================================
-# ЗАГРУЗКА ВОПРОСОВ
+# ЗАГРУЗКА БАНКА
 # =========================================================
 
 def load_bank():
 
-    with DATA_PATH.open(
-        "r",
-        encoding="utf-8"
-    ) as file:
-
+    with DATA_PATH.open("r", encoding="utf-8") as file:
         obj = json.load(file)
 
-    bank_name = obj.get(
-        "bank_name",
-        ""
-    )
+    bank_name = obj.get("bank_name", "")
+    questions = obj.get("questions", [])
 
-    questions = obj.get(
-        "questions",
-        []
-    )
-
-    if not isinstance(
-        questions,
-        list
-    ):
-        raise ValueError(
-            "Поле 'questions' должно быть списком"
-        )
+    if not isinstance(questions, list):
+        raise ValueError("Поле 'questions' должно быть списком")
 
     return bank_name, questions
 
 
 # =========================================================
-# ОБРАБОТКА ОТВЕТОВ
+# ОТВЕТЫ
 # =========================================================
 
 def canon_list(value):
@@ -100,9 +84,7 @@ def canon_list(value):
     if isinstance(value, list):
         parts = value
     else:
-        parts = str(
-            value or ""
-        ).split(";")
+        parts = str(value or "").split(";")
 
     return {
         str(item).strip().casefold()
@@ -113,29 +95,17 @@ def canon_list(value):
 
 def is_correct(question, answer):
 
-    question_type = question.get(
-        "type",
-        ""
-    )
+    question_type = question.get("type", "")
 
     if question_type == "несколько":
-
         return (
             canon_list(answer)
             ==
-            canon_list(
-                question.get(
-                    "correct",
-                    []
-                )
-            )
+            canon_list(question.get("correct", []))
         )
 
     acceptable = canon_list(
-        question.get(
-            "correct",
-            []
-        )
+        question.get("correct", [])
     )
 
     user_answer = str(
@@ -146,20 +116,14 @@ def is_correct(question, answer):
 
 
 # =========================================================
-# ОПРЕДЕЛЕНИЕ КЛАВИАТУРЫ
+# ТИП КЛАВИАТУРЫ
 # =========================================================
 
 def is_numeric_answer(question):
 
-    correct = question.get(
-        "correct",
-        []
-    )
+    correct = question.get("correct", [])
 
-    if not isinstance(
-        correct,
-        list
-    ):
+    if not isinstance(correct, list):
         correct = [correct]
 
     if not correct:
@@ -169,38 +133,30 @@ def is_numeric_answer(question):
         r"^[+-]?\d+(?:[.,]\d+)?$"
     )
 
-    for answer in correct:
-
-        if not pattern.fullmatch(
+    return all(
+        pattern.fullmatch(
             str(answer).strip()
-        ):
-            return False
-
-    return True
+        )
+        for answer in correct
+    )
 
 
 # =========================================================
-# СТРОКА ОТВЕТА С НЕСКОЛЬКИМИ ВАРИАНТАМИ
+# MULTIPLE CHOICE
 # =========================================================
 
 class MultiAnswerRow(BoxLayout):
 
     selected = BooleanProperty(False)
 
-    def __init__(
-        self,
-        **kwargs
-    ):
+    def __init__(self, **kwargs):
 
         super().__init__(**kwargs)
 
         with self.canvas.before:
 
             self.bg_color = Color(
-                .97,
-                .96,
-                .94,
-                1
+                .97, .96, .94, 1
             )
 
             self.bg_rect = Rectangle(
@@ -210,12 +166,7 @@ class MultiAnswerRow(BoxLayout):
 
         with self.canvas.after:
 
-            self.line_color = Color(
-                0,
-                0,
-                0,
-                1
-            )
+            Color(0, 0, 0, 1)
 
             self.border = Line(
                 rectangle=(
@@ -224,7 +175,7 @@ class MultiAnswerRow(BoxLayout):
                     self.width,
                     self.height
                 ),
-                width=1.2
+                width=1.15
             )
 
         self.bind(
@@ -233,10 +184,7 @@ class MultiAnswerRow(BoxLayout):
             selected=self._update_selected
         )
 
-    def _update_canvas(
-        self,
-        *args
-    ):
+    def _update_canvas(self, *args):
 
         self.bg_rect.pos = self.pos
         self.bg_rect.size = self.size
@@ -248,32 +196,23 @@ class MultiAnswerRow(BoxLayout):
             self.height
         )
 
-    def _update_selected(
-        self,
-        *args
-    ):
+    def _update_selected(self, *args):
 
         if self.selected:
 
             self.bg_color.rgba = (
-                .82,
-                .74,
-                .64,
-                1
+                .82, .74, .64, 1
             )
 
         else:
 
             self.bg_color.rgba = (
-                .97,
-                .96,
-                .94,
-                1
+                .97, .96, .94, 1
             )
 
 
 # =========================================================
-# ГЛАВНЫЙ ЭКРАН
+# LOGIN
 # =========================================================
 
 class Login(Screen):
@@ -281,10 +220,7 @@ class Login(Screen):
     bank = StringProperty("")
     admin_enabled = BooleanProperty(False)
 
-    def on_pre_enter(
-        self,
-        *args
-    ):
+    def on_pre_enter(self, *args):
 
         app = App.get_running_app()
 
@@ -296,17 +232,12 @@ class Login(Screen):
 
         self.update_admin_state()
 
-    def update_admin_state(
-        self,
-        *args
-    ):
+    def update_admin_state(self, *args):
 
         if "name" not in self.ids:
             return
 
-        value = (
-            self.ids.name.text.strip()
-        )
+        value = self.ids.name.text.strip()
 
         self.admin_enabled = (
             value == ADMIN_CODE
@@ -319,10 +250,7 @@ class Login(Screen):
             )
 
             self.ids.msg.color = (
-                .10,
-                .45,
-                .15,
-                1
+                .10, .45, .15, 1
             )
 
         else:
@@ -335,15 +263,10 @@ class Login(Screen):
                 self.ids.msg.text = ""
 
             self.ids.msg.color = (
-                .75,
-                .10,
-                .10,
-                1
+                .75, .10, .10, 1
             )
 
-    def open_settings(
-        self
-    ):
+    def open_settings(self):
 
         self.update_admin_state()
 
@@ -351,26 +274,17 @@ class Login(Screen):
             return
 
         self.ids.name.text = ""
+        self.manager.current = "settings"
 
-        self.manager.current = (
-            "settings"
-        )
+    def start(self, mode):
 
-    def start(
-        self,
-        mode
-    ):
-
-        name = (
-            self.ids.name.text.strip()
-        )
+        name = self.ids.name.text.strip()
 
         if not name:
 
             self.ids.msg.text = (
                 "Введите фамилию и инициалы"
             )
-
             return
 
         if name == ADMIN_CODE:
@@ -379,7 +293,6 @@ class Login(Screen):
                 "Для запуска тестирования "
                 "введите ФИО тестируемого"
             )
-
             return
 
         app = App.get_running_app()
@@ -394,26 +307,21 @@ class Login(Screen):
             self.ids.msg.text = (
                 "Банк вопросов пуст"
             )
-
             return
 
         self.ids.msg.text = ""
 
-        test = (
-            self.manager.get_screen(
-                "test"
-            )
+        test = self.manager.get_screen(
+            "test"
         )
 
         test.begin()
 
-        self.manager.current = (
-            "test"
-        )
+        self.manager.current = "test"
 
 
 # =========================================================
-# ЭКРАН ТЕСТИРОВАНИЯ
+# TEST
 # =========================================================
 
 class Test(Screen):
@@ -430,6 +338,8 @@ class Test(Screen):
     input = None
     btns = None
 
+    # -----------------------------------------------------
+    # START
     # -----------------------------------------------------
 
     def begin(self):
@@ -451,7 +361,6 @@ class Test(Screen):
         self.source = ""
 
         if self.event:
-
             self.event.cancel()
             self.event = None
 
@@ -467,11 +376,10 @@ class Test(Screen):
         self.render()
 
     # -----------------------------------------------------
+    # TIMER
+    # -----------------------------------------------------
 
-    def tick(
-        self,
-        dt
-    ):
+    def tick(self, dt):
 
         app = App.get_running_app()
 
@@ -488,16 +396,15 @@ class Test(Screen):
         if app.seconds <= 0:
 
             self.finish()
-
             return False
 
         return True
 
     # -----------------------------------------------------
+    # CURRENT ANSWER
+    # -----------------------------------------------------
 
-    def get_current_answer(
-        self
-    ):
+    def get_current_answer(self):
 
         app = App.get_running_app()
 
@@ -505,20 +412,15 @@ class Test(Screen):
             return ""
 
         if not (
-            0 <= self.idx
-            < len(app.questions)
+            0 <= self.idx < len(app.questions)
         ):
             return ""
 
-        question = (
-            app.questions[self.idx]
-        )
+        question = app.questions[self.idx]
 
-        question_type = (
-            question.get(
-                "type",
-                ""
-            )
+        question_type = question.get(
+            "type",
+            ""
         )
 
         if question_type == "текстовый":
@@ -526,15 +428,11 @@ class Test(Screen):
             if self.input is None:
                 return ""
 
-            return (
-                self.input.text.strip()
-            )
+            return self.input.text.strip()
 
         if question_type == "один":
 
-            for button in (
-                self.btns or []
-            ):
+            for button in self.btns or []:
 
                 if button.state == "down":
                     return button.text
@@ -545,54 +443,35 @@ class Test(Screen):
 
             selected = []
 
-            for (
-                option,
-                checkbox,
-                row
-            ) in (
+            for option, checkbox, row in (
                 self.btns or []
             ):
 
                 if checkbox.active:
+                    selected.append(option)
 
-                    selected.append(
-                        option
-                    )
-
-            return "; ".join(
-                selected
-            )
+            return "; ".join(selected)
 
         return ""
 
     # -----------------------------------------------------
+    # SAVE
+    # -----------------------------------------------------
 
-    def save_current(
-        self
-    ):
+    def save_current(self):
 
         app = App.get_running_app()
 
-        answer = (
-            self.get_current_answer()
-        )
+        answer = self.get_current_answer()
 
         if (
-            0 <= self.idx
-            < len(app.saved)
+            0 <= self.idx < len(app.saved)
         ):
-
-            app.saved[
-                self.idx
-            ] = answer
+            app.saved[self.idx] = answer
 
         return answer
 
-    # -----------------------------------------------------
-
-    def has_answer(
-        self
-    ):
+    def has_answer(self):
 
         return bool(
             str(
@@ -601,10 +480,91 @@ class Test(Screen):
         )
 
     # -----------------------------------------------------
+    # SOURCE
+    # -----------------------------------------------------
 
-    def render(
-        self
-    ):
+    def show_source_after_answer(self, *args):
+        """
+        В режиме обучения источник появляется
+        только после того, как пользователь дал ответ.
+        """
+
+        app = App.get_running_app()
+
+        if app.mode != "обучение":
+            return
+
+        if not self.has_answer():
+            self.source = ""
+            return
+
+        self.save_current()
+        self.show_source()
+
+    def show_source(self):
+
+        app = App.get_running_app()
+
+        if not app.questions:
+            return
+
+        question = app.questions[self.idx]
+
+        source = question.get(
+            "source",
+            ""
+        )
+
+        # Поддерживаем как обычную строку,
+        # так и расширенный источник в JSON.
+        if isinstance(source, dict):
+
+            document = str(
+                source.get(
+                    "document",
+                    ""
+                )
+            ).strip()
+
+            section = str(
+                source.get(
+                    "section",
+                    ""
+                )
+            ).strip()
+
+            text = str(
+                source.get(
+                    "text",
+                    ""
+                )
+            ).strip()
+
+            parts = [
+                part
+                for part in (
+                    document,
+                    section,
+                    text
+                )
+                if part
+            ]
+
+            self.source = "\n\n".join(
+                parts
+            )
+
+        else:
+
+            self.source = str(
+                source or ""
+            ).strip()
+
+    # -----------------------------------------------------
+    # RENDER
+    # -----------------------------------------------------
+
+    def render(self):
 
         app = App.get_running_app()
 
@@ -619,15 +579,11 @@ class Test(Screen):
             )
         )
 
-        question = (
-            app.questions[self.idx]
-        )
+        question = app.questions[self.idx]
 
-        self.question = (
-            question.get(
-                "text",
-                ""
-            )
+        self.question = question.get(
+            "text",
+            ""
         )
 
         self.progress = (
@@ -638,54 +594,44 @@ class Test(Screen):
         self.message = ""
         self.source = ""
 
-        if app.mode == "обучение":
-
-            self.timer = "--:--"
-
-        else:
+        if app.mode == "контроль":
 
             self.timer = (
                 f"{app.seconds // 60:02d}:"
                 f"{app.seconds % 60:02d}"
             )
 
-        answers_box = (
-            self.ids.answers
-        )
+        else:
+
+            # В обучении таймер полностью скрывается KV.
+            self.timer = ""
+
+        answers_box = self.ids.answers
 
         answers_box.clear_widgets()
 
         self.input = None
         self.btns = []
 
-        question_type = (
-            question.get(
-                "type",
-                ""
-            )
+        question_type = question.get(
+            "type",
+            ""
         )
 
         saved_answer = ""
 
-        if self.idx < len(
-            app.saved
-        ):
-
-            saved_answer = (
-                app.saved[self.idx]
-            )
+        if self.idx < len(app.saved):
+            saved_answer = app.saved[self.idx]
 
         # =================================================
-        # ТЕКСТОВЫЙ ОТВЕТ
+        # TEXT
         # =================================================
 
         if question_type == "текстовый":
 
             keyboard_type = (
                 "number"
-                if is_numeric_answer(
-                    question
-                )
+                if is_numeric_answer(question)
                 else "text"
             )
 
@@ -704,12 +650,25 @@ class Test(Screen):
                 )
             )
 
+            # Для текстового ответа не показываем
+            # источник после первой буквы.
+            # Он появится после Enter или потери фокуса.
+            self.input.bind(
+                on_text_validate=
+                self.show_source_after_answer
+            )
+
+            self.input.bind(
+                focus=
+                self._text_focus_changed
+            )
+
             answers_box.add_widget(
                 self.input
             )
 
         # =================================================
-        # ОДИН ВАРИАНТ
+        # SINGLE
         # =================================================
 
         elif question_type == "один":
@@ -719,9 +678,7 @@ class Test(Screen):
                 []
             ):
 
-                option_text = str(
-                    option
-                )
+                option_text = str(option)
 
                 button = ToggleButton(
                     text=option_text,
@@ -730,31 +687,31 @@ class Test(Screen):
                     font_size="16sp",
 
                     size_hint_y=None,
-                    height=dp(68),
+                    height=dp(56),
 
                     halign="center",
                     valign="middle",
 
                     padding=(
-                        dp(14),
-                        dp(12)
+                        dp(12),
+                        dp(10)
+                    ),
+
+                    color=(
+                        .08, .07, .06, 1
                     ),
 
                     background_normal="",
                     background_down="",
 
                     background_color=(
-                        .92,
-                        .90,
-                        .87,
-                        1
+                        .92, .90, .87, 1
                     )
                 )
 
                 button.text_size = (
                     max(
-                        Window.width
-                        - dp(70),
+                        Window.width - dp(70),
                         dp(200)
                     ),
                     None
@@ -771,13 +728,10 @@ class Test(Screen):
                 )
 
                 if (
-                    str(
-                        saved_answer
-                    ).strip()
+                    str(saved_answer).strip()
                     ==
                     option_text
                 ):
-
                     button.state = "down"
 
                 self._single_state_changed(
@@ -789,12 +743,17 @@ class Test(Screen):
                     button
                 )
 
-                self.btns.append(
-                    button
-                )
+                self.btns.append(button)
+
+            if (
+                saved_answer
+                and
+                app.mode == "обучение"
+            ):
+                self.show_source()
 
         # =================================================
-        # НЕСКОЛЬКО ВАРИАНТОВ
+        # MULTIPLE
         # =================================================
 
         elif question_type == "несколько":
@@ -808,19 +767,17 @@ class Test(Screen):
                 []
             ):
 
-                option_text = str(
-                    option
-                )
+                option_text = str(option)
 
                 row = MultiAnswerRow(
                     orientation="horizontal",
                     size_hint_y=None,
-                    height=dp(68),
-                    spacing=dp(10),
+                    height=dp(56),
+                    spacing=dp(4),
 
                     padding=(
-                        dp(10),
-                        dp(7)
+                        dp(6),
+                        dp(5)
                     )
                 )
 
@@ -831,7 +788,11 @@ class Test(Screen):
                     ),
 
                     size_hint_x=None,
-                    width=dp(48)
+                    width=dp(42),
+
+                    color=(
+                        .20, .16, .12, 1
+                    )
                 )
 
                 label = Label(
@@ -840,17 +801,14 @@ class Test(Screen):
                     font_size="16sp",
 
                     color=(
-                        .08,
-                        .07,
-                        .06,
-                        1
+                        .08, .07, .06, 1
                     ),
 
                     halign="left",
                     valign="middle",
 
                     size_hint_y=None,
-                    height=dp(54)
+                    height=dp(46)
                 )
 
                 label.bind(
@@ -865,28 +823,18 @@ class Test(Screen):
 
                 checkbox.bind(
                     active=lambda cb, value, r=row:
-                    setattr(
+                    self._multiple_state_changed(
                         r,
-                        "selected",
                         value
                     )
                 )
 
-                row.selected = (
-                    checkbox.active
-                )
+                row.selected = checkbox.active
 
-                row.add_widget(
-                    checkbox
-                )
+                row.add_widget(checkbox)
+                row.add_widget(label)
 
-                row.add_widget(
-                    label
-                )
-
-                answers_box.add_widget(
-                    row
-                )
+                answers_box.add_widget(row)
 
                 self.btns.append(
                     (
@@ -896,15 +844,35 @@ class Test(Screen):
                     )
                 )
 
+            if (
+                saved_answer
+                and
+                app.mode == "обучение"
+            ):
+                self.show_source()
+
         else:
 
             self.question = (
                 "Ошибка: неизвестный тип вопроса"
             )
 
-    # =====================================================
-    # ЦВЕТ ВЫБРАННОГО ОТВЕТА
-    # =====================================================
+    # -----------------------------------------------------
+    # TEXT SOURCE
+    # -----------------------------------------------------
+
+    def _text_focus_changed(
+        self,
+        widget,
+        focused
+    ):
+
+        if not focused:
+            self.show_source_after_answer()
+
+    # -----------------------------------------------------
+    # SINGLE STATE
+    # -----------------------------------------------------
 
     def _single_state_changed(
         self,
@@ -915,22 +883,40 @@ class Test(Screen):
         if state == "down":
 
             button.background_color = (
-                .78,
-                .68,
-                .57,
-                1
+                .78, .68, .57, 1
             )
+
+            self.show_source_after_answer()
 
         else:
 
             button.background_color = (
-                .92,
-                .90,
-                .87,
-                1
+                .92, .90, .87, 1
             )
 
-    # =====================================================
+    # -----------------------------------------------------
+    # MULTIPLE STATE
+    # -----------------------------------------------------
+
+    def _multiple_state_changed(
+        self,
+        row,
+        value
+    ):
+
+        row.selected = value
+
+        # Обновление состояния checkbox завершается
+        # до проверки ответа.
+        Clock.schedule_once(
+            lambda dt:
+            self.show_source_after_answer(),
+            0
+        )
+
+    # -----------------------------------------------------
+    # ADAPTIVE HEIGHT
+    # -----------------------------------------------------
 
     def _resize_answer_button(
         self,
@@ -939,12 +925,9 @@ class Test(Screen):
     ):
 
         button.height = max(
-            dp(68),
-            texture_size[1]
-            + dp(30)
+            dp(56),
+            texture_size[1] + dp(24)
         )
-
-    # =====================================================
 
     def _resize_multi_label(
         self,
@@ -957,8 +940,6 @@ class Test(Screen):
             None
         )
 
-    # =====================================================
-
     def _resize_multi_row(
         self,
         label,
@@ -966,25 +947,21 @@ class Test(Screen):
     ):
 
         label.height = max(
-            dp(54),
-            texture_size[1]
-            + dp(18)
+            dp(46),
+            texture_size[1] + dp(14)
         )
 
         if label.parent:
 
             label.parent.height = (
-                label.height
-                + dp(14)
+                label.height + dp(10)
             )
 
-    # =====================================================
-    # СЛЕДУЮЩИЙ ВОПРОС
-    # =====================================================
+    # -----------------------------------------------------
+    # NEXT
+    # -----------------------------------------------------
 
-    def next(
-        self
-    ):
+    def next(self):
 
         app = App.get_running_app()
 
@@ -997,7 +974,6 @@ class Test(Screen):
                 "Сначала выберите "
                 "или введите ответ"
             )
-
             return
 
         self.message = ""
@@ -1006,23 +982,20 @@ class Test(Screen):
 
         if (
             self.idx
-            >= len(app.questions) - 1
+            >=
+            len(app.questions) - 1
         ):
-
             self.finish()
             return
 
         self.idx += 1
-
         self.render()
 
-    # =====================================================
-    # ПРЕДЫДУЩИЙ ВОПРОС
-    # =====================================================
+    # -----------------------------------------------------
+    # PREVIOUS
+    # -----------------------------------------------------
 
-    def prev(
-        self
-    ):
+    def prev(self):
 
         app = App.get_running_app()
 
@@ -1030,22 +1003,18 @@ class Test(Screen):
             return
 
         self.save_current()
-
         self.message = ""
 
         if self.idx > 0:
 
             self.idx -= 1
-
             self.render()
 
-    # =====================================================
-    # ПОКАЗАТЬ ПРАВИЛЬНЫЙ ОТВЕТ
-    # =====================================================
+    # -----------------------------------------------------
+    # CORRECT ANSWER
+    # -----------------------------------------------------
 
-    def show_correct(
-        self
-    ):
+    def show_correct(self):
 
         app = App.get_running_app()
 
@@ -1058,28 +1027,20 @@ class Test(Screen):
                 "Сначала выберите "
                 "или введите ответ"
             )
-
             return
 
         self.message = ""
 
         self.save_current()
 
-        question = (
-            app.questions[self.idx]
+        question = app.questions[self.idx]
+
+        correct = question.get(
+            "correct",
+            []
         )
 
-        correct = (
-            question.get(
-                "correct",
-                []
-            )
-        )
-
-        if isinstance(
-            correct,
-            list
-        ):
+        if isinstance(correct, list):
 
             correct_text = "; ".join(
                 str(item)
@@ -1088,38 +1049,27 @@ class Test(Screen):
 
         else:
 
-            correct_text = str(
-                correct
-            )
+            correct_text = str(correct)
 
-        source = (
-            question.get(
-                "source",
-                ""
-            )
-        )
-
-        self.source = (
+        self.message = (
             "Правильный ответ: "
             + correct_text
-            + "\n\nИсточник: "
-            + str(source)
         )
 
-    # =====================================================
-    # ЗАВЕРШИТЬ ТЕСТ
-    # =====================================================
+        # Источник остаётся отдельным блоком.
+        if app.mode == "обучение":
+            self.show_source()
 
-    def finish(
-        self
-    ):
+    # -----------------------------------------------------
+    # FINISH
+    # -----------------------------------------------------
+
+    def finish(self):
 
         app = App.get_running_app()
 
         try:
-
             self.save_current()
-
         except Exception:
             pass
 
@@ -1130,10 +1080,7 @@ class Test(Screen):
 
         score = 0
 
-        for (
-            question,
-            answer
-        ) in zip(
+        for question, answer in zip(
             app.questions,
             app.saved
         ):
@@ -1142,7 +1089,6 @@ class Test(Screen):
                 question,
                 answer
             ):
-
                 score += 1
 
         required_score = min(
@@ -1154,10 +1100,8 @@ class Test(Screen):
             score >= required_score
         )
 
-        result = (
-            self.manager.get_screen(
-                "result"
-            )
+        result = self.manager.get_screen(
+            "result"
         )
 
         status = (
@@ -1175,13 +1119,11 @@ class Test(Screen):
             f"{status}"
         )
 
-        self.manager.current = (
-            "result"
-        )
+        self.manager.current = "result"
 
 
 # =========================================================
-# РЕЗУЛЬТАТ
+# RESULT
 # =========================================================
 
 class Result(Screen):
@@ -1190,32 +1132,25 @@ class Result(Screen):
 
 
 # =========================================================
-# НАСТРОЙКИ АДМИНИСТРАТОРА
+# ADMIN
 # =========================================================
 
 class AdminSettings(Screen):
 
-    def go_back(
-        self
-    ):
+    def go_back(self):
 
-        self.manager.current = (
-            "login"
-        )
+        self.manager.current = "login"
 
 
 # =========================================================
-# ПРИЛОЖЕНИЕ
+# APP
 # =========================================================
 
 class TechProfiApp(App):
 
     title = APP_NAME
 
-    def __init__(
-        self,
-        **kwargs
-    ):
+    def __init__(self, **kwargs):
 
         super().__init__(**kwargs)
 
@@ -1230,9 +1165,7 @@ class TechProfiApp(App):
 
         self.seconds = 0
 
-    def build(
-        self
-    ):
+    def build(self):
 
         self.bank_name, self.pool = (
             load_bank()
@@ -1251,31 +1184,23 @@ class TechProfiApp(App):
             str(KV_PATH)
         )
 
-    def on_start(
-        self
-    ):
+    def on_start(self):
 
         if not self.root:
             return
 
         try:
 
-            login = (
-                self.root.get_screen(
-                    "login"
-                )
+            login = self.root.get_screen(
+                "login"
             )
 
-            login.bank = (
-                self.bank_name
-            )
+            login.bank = self.bank_name
 
         except Exception:
             pass
 
-    def prepare_questions(
-        self
-    ):
+    def prepare_questions(self):
 
         self.questions = list(
             self.pool
@@ -1298,7 +1223,7 @@ class TechProfiApp(App):
 
 
 # =========================================================
-# ЗАПУСК
+# START
 # =========================================================
 
 if __name__ == "__main__":
