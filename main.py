@@ -1,4 +1,5 @@
 import json
+import math
 import random
 import re
 from pathlib import Path
@@ -25,7 +26,7 @@ from kivy.uix.togglebutton import ToggleButton
 
 
 # =========================================================
-# ПУТИ И НАСТРОЙКИ
+# ПУТИ
 # =========================================================
 
 BASE = Path(__file__).resolve().parent
@@ -39,11 +40,71 @@ KV_PATH = BASE / "testov.kv"
 
 APP_NAME = "ТехПрофи"
 
+ADMIN_CODE = "TEST_OVIK"
+
+
+# =========================================================
+# НАСТРОЙКИ ПО УМОЛЧАНИЮ
+# =========================================================
+
 DEFAULT_NUM = 25
 DEFAULT_MINUTES = 15
-DEFAULT_PASS = 20
+DEFAULT_PASS_PERCENT = 80
 
-ADMIN_CODE = "TEST_OVIK"
+
+# =========================================================
+# ПОЛНЫЕ НАЗВАНИЯ ИСТОЧНИКОВ
+# =========================================================
+#
+# Ключ — короткое обозначение, которое используется
+# в questions.json / bank_name / source.
+#
+# Значение — то, что будет отображаться пользователю.
+#
+# .dat здесь специально отсутствует.
+# =========================================================
+
+SOURCE_NAMES = {
+
+    "Постановление Правительства РФ от 16.02.2008 N 87":
+        "Постановление Правительства РФ от 16.02.2008 N 87 "
+        "О составе разделов проектной документации "
+        "и требованиях к их содержанию",
+
+    "СП 7.13130.2013":
+        "СП 7.13130.2013 "
+        "Отопление, вентиляция и кондиционирование. "
+        "Требования пожарной безопасности",
+
+    "СП 50.13330.2024":
+        "СП 50.13330.2024 "
+        "Тепловая защита зданий",
+
+    "СП 60.13330.2020":
+        "СП 60.13330.2020 "
+        "Отопление, вентиляция и кондиционирование воздуха",
+
+    "СП 73.13330.2016":
+        "СП 73.13330.2016 "
+        "Внутренние санитарно-технические системы зданий",
+
+    "СП 124.13330.2012":
+        "СП 124.13330.2012 "
+        "Тепловые сети",
+
+    "СП 246.1325800.2023":
+        "СП 246.1325800.2023 "
+        "Положение об авторском надзоре при строительстве, "
+        "реконструкции и капитальном ремонте объектов "
+        "капитального строительства",
+
+    "СП 510.1325800.2022":
+        "СП 510.1325800.2022 "
+        "Тепловые пункты и системы внутреннего теплоснабжения",
+
+    "Федеральный закон 384":
+        "Федеральный закон 384",
+}
 
 
 # =========================================================
@@ -63,16 +124,164 @@ LabelBase.register(
 
 def load_bank():
 
-    with DATA_PATH.open("r", encoding="utf-8") as file:
+    with DATA_PATH.open(
+        "r",
+        encoding="utf-8"
+    ) as file:
+
         obj = json.load(file)
 
-    bank_name = obj.get("bank_name", "")
-    questions = obj.get("questions", [])
+    bank_name = str(
+        obj.get(
+            "bank_name",
+            ""
+        )
+    ).strip()
 
-    if not isinstance(questions, list):
-        raise ValueError("Поле 'questions' должно быть списком")
+    questions = obj.get(
+        "questions",
+        []
+    )
 
-    return bank_name, questions
+    if not isinstance(
+        questions,
+        list
+    ):
+
+        raise ValueError(
+            "Поле 'questions' должно быть списком"
+        )
+
+    # Каждому вопросу назначаем банк,
+    # если отдельный источник банка пока
+    # не указан непосредственно в вопросе.
+    normalized_questions = []
+
+    for question in questions:
+
+        if not isinstance(
+            question,
+            dict
+        ):
+            continue
+
+        item = dict(question)
+
+        if not item.get("bank_name"):
+            item["bank_name"] = bank_name
+
+        normalized_questions.append(
+            item
+        )
+
+    return (
+        bank_name,
+        normalized_questions
+    )
+
+
+# =========================================================
+# ИСТОЧНИК ВОПРОСА
+# =========================================================
+
+def get_question_source_id(
+    question,
+    default_bank=""
+):
+    """
+    Возвращает короткое обозначение документа,
+    которому принадлежит вопрос.
+
+    Приоритет:
+    1. source_id
+    2. bank_name
+    3. определение по source
+    4. default_bank
+    """
+
+    source_id = str(
+        question.get(
+            "source_id",
+            ""
+        )
+    ).strip()
+
+    if source_id:
+        return source_id
+
+    question_bank = str(
+        question.get(
+            "bank_name",
+            ""
+        )
+    ).strip()
+
+    if question_bank:
+        return question_bank
+
+    source = question.get(
+        "source",
+        ""
+    )
+
+    if isinstance(
+        source,
+        dict
+    ):
+
+        document = str(
+            source.get(
+                "document",
+                ""
+            )
+        ).strip()
+
+        source_text = document
+
+    else:
+
+        source_text = str(
+            source or ""
+        ).strip()
+
+    for source_key in SOURCE_NAMES:
+
+        if source_key.casefold() in (
+            source_text.casefold()
+        ):
+
+            return source_key
+
+    return str(
+        default_bank or ""
+    ).strip()
+
+
+# =========================================================
+# ПОЛНОЕ НАЗВАНИЕ ИСТОЧНИКА
+# =========================================================
+
+def get_source_display_name(
+    source_id
+):
+
+    source_id = str(
+        source_id or ""
+    ).strip()
+
+    # На всякий случай убираем .dat
+    if source_id.lower().endswith(
+        ".dat"
+    ):
+
+        source_id = (
+            source_id[:-4]
+        )
+
+    return SOURCE_NAMES.get(
+        source_id,
+        source_id
+    )
 
 
 # =========================================================
@@ -81,10 +290,18 @@ def load_bank():
 
 def canon_list(value):
 
-    if isinstance(value, list):
+    if isinstance(
+        value,
+        list
+    ):
+
         parts = value
+
     else:
-        parts = str(value or "").split(";")
+
+        parts = str(
+            value or ""
+        ).split(";")
 
     return {
         str(item).strip().casefold()
@@ -93,38 +310,67 @@ def canon_list(value):
     }
 
 
-def is_correct(question, answer):
+def is_correct(
+    question,
+    answer
+):
 
-    question_type = question.get("type", "")
+    question_type = question.get(
+        "type",
+        ""
+    )
 
     if question_type == "несколько":
+
         return (
             canon_list(answer)
             ==
-            canon_list(question.get("correct", []))
+            canon_list(
+                question.get(
+                    "correct",
+                    []
+                )
+            )
         )
 
     acceptable = canon_list(
-        question.get("correct", [])
+        question.get(
+            "correct",
+            []
+        )
     )
 
     user_answer = str(
         answer or ""
     ).strip().casefold()
 
-    return user_answer in acceptable
+    return (
+        user_answer
+        in acceptable
+    )
 
 
 # =========================================================
 # ТИП КЛАВИАТУРЫ
 # =========================================================
 
-def is_numeric_answer(question):
+def is_numeric_answer(
+    question
+):
 
-    correct = question.get("correct", [])
+    correct = question.get(
+        "correct",
+        []
+    )
 
-    if not isinstance(correct, list):
-        correct = [correct]
+    if not isinstance(
+        correct,
+        list
+    ):
+
+        correct = [
+            correct
+        ]
 
     if not correct:
         return False
@@ -134,9 +380,11 @@ def is_numeric_answer(question):
     )
 
     return all(
+
         pattern.fullmatch(
             str(answer).strip()
         )
+
         for answer in correct
     )
 
@@ -145,18 +393,30 @@ def is_numeric_answer(question):
 # MULTIPLE CHOICE
 # =========================================================
 
-class MultiAnswerRow(BoxLayout):
+class MultiAnswerRow(
+    BoxLayout
+):
 
-    selected = BooleanProperty(False)
+    selected = BooleanProperty(
+        False
+    )
 
-    def __init__(self, **kwargs):
+    def __init__(
+        self,
+        **kwargs
+    ):
 
-        super().__init__(**kwargs)
+        super().__init__(
+            **kwargs
+        )
 
         with self.canvas.before:
 
             self.bg_color = Color(
-                .97, .96, .94, 1
+                .97,
+                .96,
+                .94,
+                1
             )
 
             self.bg_rect = Rectangle(
@@ -166,7 +426,12 @@ class MultiAnswerRow(BoxLayout):
 
         with self.canvas.after:
 
-            Color(0, 0, 0, 1)
+            Color(
+                0,
+                0,
+                0,
+                1
+            )
 
             self.border = Line(
                 rectangle=(
@@ -184,10 +449,18 @@ class MultiAnswerRow(BoxLayout):
             selected=self._update_selected
         )
 
-    def _update_canvas(self, *args):
+    def _update_canvas(
+        self,
+        *args
+    ):
 
-        self.bg_rect.pos = self.pos
-        self.bg_rect.size = self.size
+        self.bg_rect.pos = (
+            self.pos
+        )
+
+        self.bg_rect.size = (
+            self.size
+        )
 
         self.border.rectangle = (
             self.x,
@@ -196,18 +469,27 @@ class MultiAnswerRow(BoxLayout):
             self.height
         )
 
-    def _update_selected(self, *args):
+    def _update_selected(
+        self,
+        *args
+    ):
 
         if self.selected:
 
             self.bg_color.rgba = (
-                .82, .74, .64, 1
+                .82,
+                .74,
+                .64,
+                1
             )
 
         else:
 
             self.bg_color.rgba = (
-                .97, .96, .94, 1
+                .97,
+                .96,
+                .94,
+                1
             )
 
 
@@ -218,9 +500,14 @@ class MultiAnswerRow(BoxLayout):
 class Login(Screen):
 
     bank = StringProperty("")
-    admin_enabled = BooleanProperty(False)
+    admin_enabled = BooleanProperty(
+        False
+    )
 
-    def on_pre_enter(self, *args):
+    def on_pre_enter(
+        self,
+        *args
+    ):
 
         app = App.get_running_app()
 
@@ -232,12 +519,17 @@ class Login(Screen):
 
         self.update_admin_state()
 
-    def update_admin_state(self, *args):
+    def update_admin_state(
+        self,
+        *args
+    ):
 
         if "name" not in self.ids:
             return
 
-        value = self.ids.name.text.strip()
+        value = (
+            self.ids.name.text.strip()
+        )
 
         self.admin_enabled = (
             value == ADMIN_CODE
@@ -250,7 +542,10 @@ class Login(Screen):
             )
 
             self.ids.msg.color = (
-                .10, .45, .15, 1
+                .10,
+                .45,
+                .15,
+                1
             )
 
         else:
@@ -260,13 +555,19 @@ class Login(Screen):
                 ==
                 "Административный режим доступен"
             ):
+
                 self.ids.msg.text = ""
 
             self.ids.msg.color = (
-                .75, .10, .10, 1
+                .75,
+                .10,
+                .10,
+                1
             )
 
-    def open_settings(self):
+    def open_settings(
+        self
+    ):
 
         self.update_admin_state()
 
@@ -274,17 +575,34 @@ class Login(Screen):
             return
 
         self.ids.name.text = ""
-        self.manager.current = "settings"
 
-    def start(self, mode):
+        settings_screen = (
+            self.manager.get_screen(
+                "settings"
+            )
+        )
 
-        name = self.ids.name.text.strip()
+        settings_screen.load_values()
+
+        self.manager.current = (
+            "settings"
+        )
+
+    def start(
+        self,
+        mode
+    ):
+
+        name = (
+            self.ids.name.text.strip()
+        )
 
         if not name:
 
             self.ids.msg.text = (
                 "Введите фамилию и инициалы"
             )
+
             return
 
         if name == ADMIN_CODE:
@@ -293,6 +611,7 @@ class Login(Screen):
                 "Для запуска тестирования "
                 "введите ФИО тестируемого"
             )
+
             return
 
         app = App.get_running_app()
@@ -305,19 +624,24 @@ class Login(Screen):
         if not app.questions:
 
             self.ids.msg.text = (
-                "Банк вопросов пуст"
+                "Нет вопросов для выбранных источников"
             )
+
             return
 
         self.ids.msg.text = ""
 
-        test = self.manager.get_screen(
-            "test"
+        test = (
+            self.manager.get_screen(
+                "test"
+            )
         )
 
         test.begin()
 
-        self.manager.current = "test"
+        self.manager.current = (
+            "test"
+        )
 
 
 # =========================================================
@@ -342,7 +666,9 @@ class Test(Screen):
     # START
     # -----------------------------------------------------
 
-    def begin(self):
+    def begin(
+        self
+    ):
 
         app = App.get_running_app()
 
@@ -353,14 +679,17 @@ class Test(Screen):
             for _ in app.questions
         ]
 
+        # Время теперь берётся из настроек.
         app.seconds = (
-            DEFAULT_MINUTES * 60
+            app.test_minutes
+            * 60
         )
 
         self.message = ""
         self.source = ""
 
         if self.event:
+
             self.event.cancel()
             self.event = None
 
@@ -379,7 +708,10 @@ class Test(Screen):
     # TIMER
     # -----------------------------------------------------
 
-    def tick(self, dt):
+    def tick(
+        self,
+        dt
+    ):
 
         app = App.get_running_app()
 
@@ -396,6 +728,7 @@ class Test(Screen):
         if app.seconds <= 0:
 
             self.finish()
+
             return False
 
         return True
@@ -404,7 +737,9 @@ class Test(Screen):
     # CURRENT ANSWER
     # -----------------------------------------------------
 
-    def get_current_answer(self):
+    def get_current_answer(
+        self
+    ):
 
         app = App.get_running_app()
 
@@ -412,15 +747,23 @@ class Test(Screen):
             return ""
 
         if not (
-            0 <= self.idx < len(app.questions)
+            0 <= self.idx
+            < len(app.questions)
         ):
+
             return ""
 
-        question = app.questions[self.idx]
+        question = (
+            app.questions[
+                self.idx
+            ]
+        )
 
-        question_type = question.get(
-            "type",
-            ""
+        question_type = (
+            question.get(
+                "type",
+                ""
+            )
         )
 
         if question_type == "текстовый":
@@ -428,13 +771,22 @@ class Test(Screen):
             if self.input is None:
                 return ""
 
-            return self.input.text.strip()
+            return (
+                self.input.text.strip()
+            )
 
         if question_type == "один":
 
-            for button in self.btns or []:
+            for button in (
+                self.btns or []
+            ):
 
-                if button.state == "down":
+                if (
+                    button.state
+                    ==
+                    "down"
+                ):
+
                     return button.text
 
             return ""
@@ -443,35 +795,54 @@ class Test(Screen):
 
             selected = []
 
-            for option, checkbox, row in (
+            for (
+                option,
+                checkbox,
+                row
+            ) in (
                 self.btns or []
             ):
 
                 if checkbox.active:
-                    selected.append(option)
 
-            return "; ".join(selected)
+                    selected.append(
+                        option
+                    )
+
+            return "; ".join(
+                selected
+            )
 
         return ""
 
     # -----------------------------------------------------
-    # SAVE
+    # SAVE ANSWER
     # -----------------------------------------------------
 
-    def save_current(self):
+    def save_current(
+        self
+    ):
 
         app = App.get_running_app()
 
-        answer = self.get_current_answer()
+        answer = (
+            self.get_current_answer()
+        )
 
         if (
-            0 <= self.idx < len(app.saved)
+            0 <= self.idx
+            < len(app.saved)
         ):
-            app.saved[self.idx] = answer
+
+            app.saved[
+                self.idx
+            ] = answer
 
         return answer
 
-    def has_answer(self):
+    def has_answer(
+        self
+    ):
 
         return bool(
             str(
@@ -483,11 +854,10 @@ class Test(Screen):
     # SOURCE
     # -----------------------------------------------------
 
-    def show_source_after_answer(self, *args):
-        """
-        В режиме обучения источник появляется
-        только после того, как пользователь дал ответ.
-        """
+    def show_source_after_answer(
+        self,
+        *args
+    ):
 
         app = App.get_running_app()
 
@@ -495,29 +865,37 @@ class Test(Screen):
             return
 
         if not self.has_answer():
+
             self.source = ""
             return
 
         self.save_current()
         self.show_source()
 
-    def show_source(self):
+    def show_source(
+        self
+    ):
 
         app = App.get_running_app()
 
         if not app.questions:
             return
 
-        question = app.questions[self.idx]
+        question = (
+            app.questions[
+                self.idx
+            ]
+        )
 
         source = question.get(
             "source",
             ""
         )
 
-        # Поддерживаем как обычную строку,
-        # так и расширенный источник в JSON.
-        if isinstance(source, dict):
+        if isinstance(
+            source,
+            dict
+        ):
 
             document = str(
                 source.get(
@@ -550,8 +928,10 @@ class Test(Screen):
                 if part
             ]
 
-            self.source = "\n\n".join(
-                parts
+            self.source = (
+                "\n\n".join(
+                    parts
+                )
             )
 
         else:
@@ -564,7 +944,9 @@ class Test(Screen):
     # RENDER
     # -----------------------------------------------------
 
-    def render(self):
+    def render(
+        self
+    ):
 
         app = App.get_running_app()
 
@@ -579,11 +961,17 @@ class Test(Screen):
             )
         )
 
-        question = app.questions[self.idx]
+        question = (
+            app.questions[
+                self.idx
+            ]
+        )
 
-        self.question = question.get(
-            "text",
-            ""
+        self.question = (
+            question.get(
+                "text",
+                ""
+            )
         )
 
         self.progress = (
@@ -603,25 +991,35 @@ class Test(Screen):
 
         else:
 
-            # В обучении таймер полностью скрывается KV.
             self.timer = ""
 
-        answers_box = self.ids.answers
+        answers_box = (
+            self.ids.answers
+        )
 
         answers_box.clear_widgets()
 
         self.input = None
         self.btns = []
 
-        question_type = question.get(
-            "type",
-            ""
+        question_type = (
+            question.get(
+                "type",
+                ""
+            )
         )
 
         saved_answer = ""
 
-        if self.idx < len(app.saved):
-            saved_answer = app.saved[self.idx]
+        if self.idx < len(
+            app.saved
+        ):
+
+            saved_answer = (
+                app.saved[
+                    self.idx
+                ]
+            )
 
         # =================================================
         # TEXT
@@ -631,7 +1029,9 @@ class Test(Screen):
 
             keyboard_type = (
                 "number"
-                if is_numeric_answer(question)
+                if is_numeric_answer(
+                    question
+                )
                 else "text"
             )
 
@@ -650,9 +1050,6 @@ class Test(Screen):
                 )
             )
 
-            # Для текстового ответа не показываем
-            # источник после первой буквы.
-            # Он появится после Enter или потери фокуса.
             self.input.bind(
                 on_text_validate=
                 self.show_source_after_answer
@@ -678,40 +1075,43 @@ class Test(Screen):
                 []
             ):
 
-                option_text = str(option)
+                option_text = str(
+                    option
+                )
 
                 button = ToggleButton(
                     text=option_text,
                     group="answer_group",
                     font_name="AppArial",
                     font_size="16sp",
-
                     size_hint_y=None,
                     height=dp(56),
-
                     halign="center",
                     valign="middle",
-
                     padding=(
                         dp(12),
                         dp(10)
                     ),
-
                     color=(
-                        .08, .07, .06, 1
+                        .08,
+                        .07,
+                        .06,
+                        1
                     ),
-
                     background_normal="",
                     background_down="",
-
                     background_color=(
-                        .92, .90, .87, 1
+                        .92,
+                        .90,
+                        .87,
+                        1
                     )
                 )
 
                 button.text_size = (
                     max(
-                        Window.width - dp(70),
+                        Window.width
+                        - dp(70),
                         dp(200)
                     ),
                     None
@@ -728,10 +1128,13 @@ class Test(Screen):
                 )
 
                 if (
-                    str(saved_answer).strip()
+                    str(
+                        saved_answer
+                    ).strip()
                     ==
                     option_text
                 ):
+
                     button.state = "down"
 
                 self._single_state_changed(
@@ -743,13 +1146,16 @@ class Test(Screen):
                     button
                 )
 
-                self.btns.append(button)
+                self.btns.append(
+                    button
+                )
 
             if (
                 saved_answer
                 and
                 app.mode == "обучение"
             ):
+
                 self.show_source()
 
         # =================================================
@@ -767,14 +1173,15 @@ class Test(Screen):
                 []
             ):
 
-                option_text = str(option)
+                option_text = str(
+                    option
+                )
 
                 row = MultiAnswerRow(
                     orientation="horizontal",
                     size_hint_y=None,
                     height=dp(56),
                     spacing=dp(4),
-
                     padding=(
                         dp(6),
                         dp(5)
@@ -786,12 +1193,13 @@ class Test(Screen):
                         option_text.casefold()
                         in saved
                     ),
-
                     size_hint_x=None,
                     width=dp(42),
-
                     color=(
-                        .20, .16, .12, 1
+                        .20,
+                        .16,
+                        .12,
+                        1
                     )
                 )
 
@@ -799,14 +1207,14 @@ class Test(Screen):
                     text=option_text,
                     font_name="AppArial",
                     font_size="16sp",
-
                     color=(
-                        .08, .07, .06, 1
+                        .08,
+                        .07,
+                        .06,
+                        1
                     ),
-
                     halign="left",
                     valign="middle",
-
                     size_hint_y=None,
                     height=dp(46)
                 )
@@ -829,12 +1237,21 @@ class Test(Screen):
                     )
                 )
 
-                row.selected = checkbox.active
+                row.selected = (
+                    checkbox.active
+                )
 
-                row.add_widget(checkbox)
-                row.add_widget(label)
+                row.add_widget(
+                    checkbox
+                )
 
-                answers_box.add_widget(row)
+                row.add_widget(
+                    label
+                )
+
+                answers_box.add_widget(
+                    row
+                )
 
                 self.btns.append(
                     (
@@ -849,6 +1266,7 @@ class Test(Screen):
                 and
                 app.mode == "обучение"
             ):
+
                 self.show_source()
 
         else:
@@ -868,6 +1286,7 @@ class Test(Screen):
     ):
 
         if not focused:
+
             self.show_source_after_answer()
 
     # -----------------------------------------------------
@@ -883,7 +1302,10 @@ class Test(Screen):
         if state == "down":
 
             button.background_color = (
-                .78, .68, .57, 1
+                .78,
+                .68,
+                .57,
+                1
             )
 
             self.show_source_after_answer()
@@ -891,7 +1313,10 @@ class Test(Screen):
         else:
 
             button.background_color = (
-                .92, .90, .87, 1
+                .92,
+                .90,
+                .87,
+                1
             )
 
     # -----------------------------------------------------
@@ -906,8 +1331,6 @@ class Test(Screen):
 
         row.selected = value
 
-        # Обновление состояния checkbox завершается
-        # до проверки ответа.
         Clock.schedule_once(
             lambda dt:
             self.show_source_after_answer(),
@@ -926,7 +1349,8 @@ class Test(Screen):
 
         button.height = max(
             dp(56),
-            texture_size[1] + dp(24)
+            texture_size[1]
+            + dp(24)
         )
 
     def _resize_multi_label(
@@ -948,20 +1372,24 @@ class Test(Screen):
 
         label.height = max(
             dp(46),
-            texture_size[1] + dp(14)
+            texture_size[1]
+            + dp(14)
         )
 
         if label.parent:
 
             label.parent.height = (
-                label.height + dp(10)
+                label.height
+                + dp(10)
             )
 
     # -----------------------------------------------------
     # NEXT
     # -----------------------------------------------------
 
-    def next(self):
+    def next(
+        self
+    ):
 
         app = App.get_running_app()
 
@@ -974,6 +1402,7 @@ class Test(Screen):
                 "Сначала выберите "
                 "или введите ответ"
             )
+
             return
 
         self.message = ""
@@ -985,17 +1414,21 @@ class Test(Screen):
             >=
             len(app.questions) - 1
         ):
+
             self.finish()
             return
 
         self.idx += 1
+
         self.render()
 
     # -----------------------------------------------------
     # PREVIOUS
     # -----------------------------------------------------
 
-    def prev(self):
+    def prev(
+        self
+    ):
 
         app = App.get_running_app()
 
@@ -1003,18 +1436,22 @@ class Test(Screen):
             return
 
         self.save_current()
+
         self.message = ""
 
         if self.idx > 0:
 
             self.idx -= 1
+
             self.render()
 
     # -----------------------------------------------------
     # CORRECT ANSWER
     # -----------------------------------------------------
 
-    def show_correct(self):
+    def show_correct(
+        self
+    ):
 
         app = App.get_running_app()
 
@@ -1027,50 +1464,67 @@ class Test(Screen):
                 "Сначала выберите "
                 "или введите ответ"
             )
+
             return
 
         self.message = ""
 
         self.save_current()
 
-        question = app.questions[self.idx]
+        question = (
+            app.questions[
+                self.idx
+            ]
+        )
 
         correct = question.get(
             "correct",
             []
         )
 
-        if isinstance(correct, list):
+        if isinstance(
+            correct,
+            list
+        ):
 
-            correct_text = "; ".join(
-                str(item)
-                for item in correct
+            correct_text = (
+                "; ".join(
+                    str(item)
+                    for item in correct
+                )
             )
 
         else:
 
-            correct_text = str(correct)
+            correct_text = str(
+                correct
+            )
 
         self.message = (
             "Правильный ответ: "
             + correct_text
         )
 
-        # Источник остаётся отдельным блоком.
         if app.mode == "обучение":
+
             self.show_source()
 
     # -----------------------------------------------------
     # FINISH
     # -----------------------------------------------------
 
-    def finish(self):
+    def finish(
+        self
+    ):
 
         app = App.get_running_app()
 
         try:
+
             self.save_current()
+
         except Exception:
+
             pass
 
         if self.event:
@@ -1080,7 +1534,10 @@ class Test(Screen):
 
         score = 0
 
-        for question, answer in zip(
+        for (
+            question,
+            answer
+        ) in zip(
             app.questions,
             app.saved
         ):
@@ -1089,19 +1546,29 @@ class Test(Screen):
                 question,
                 answer
             ):
+
                 score += 1
 
-        required_score = min(
-            DEFAULT_PASS,
+        # Проходной результат теперь рассчитывается
+        # от процента, заданного в настройках.
+        required_score = math.ceil(
             len(app.questions)
+            *
+            app.pass_percent
+            /
+            100
         )
 
         passed = (
-            score >= required_score
+            score
+            >=
+            required_score
         )
 
-        result = self.manager.get_screen(
-            "result"
+        result = (
+            self.manager.get_screen(
+                "result"
+            )
         )
 
         status = (
@@ -1114,12 +1581,16 @@ class Test(Screen):
             f"{app.user}\n\n"
             f"Результат: "
             f"{score} из "
-            f"{len(app.questions)}"
-            f"\n\n"
+            f"{len(app.questions)}\n\n"
+            f"Для успешного прохождения: "
+            f"{app.pass_percent}% "
+            f"({required_score} правильных)\n\n"
             f"{status}"
         )
 
-        self.manager.current = "result"
+        self.manager.current = (
+            "result"
+        )
 
 
 # =========================================================
@@ -1132,14 +1603,222 @@ class Result(Screen):
 
 
 # =========================================================
-# ADMIN
+# SETTINGS
 # =========================================================
 
 class AdminSettings(Screen):
 
-    def go_back(self):
+    message = StringProperty("")
 
-        self.manager.current = "login"
+    def on_pre_enter(
+        self,
+        *args
+    ):
+
+        self.load_values()
+
+    # -----------------------------------------------------
+    # ЗАГРУЗИТЬ ТЕКУЩИЕ ЗНАЧЕНИЯ
+    # -----------------------------------------------------
+
+    def load_values(
+        self
+    ):
+
+        app = App.get_running_app()
+
+        self.message = ""
+
+        # KV-файл, который мы обновим следующим шагом,
+        # будет читать эти значения непосредственно
+        # из app.question_count / app.test_minutes /
+        # app.pass_percent и списка источников.
+
+    # -----------------------------------------------------
+    # ПОЛУЧИТЬ СПИСОК ИСТОЧНИКОВ
+    # -----------------------------------------------------
+
+    def get_sources(
+        self
+    ):
+
+        app = App.get_running_app()
+
+        result = []
+
+        for source_id in (
+            app.available_sources
+        ):
+
+            result.append(
+                {
+                    "id": source_id,
+                    "name":
+                        get_source_display_name(
+                            source_id
+                        ),
+                    "selected":
+                        source_id
+                        in app.selected_sources
+                }
+            )
+
+        return result
+
+    # -----------------------------------------------------
+    # ВКЛЮЧИТЬ / ВЫКЛЮЧИТЬ ИСТОЧНИК
+    # -----------------------------------------------------
+
+    def set_source_selected(
+        self,
+        source_id,
+        selected
+    ):
+
+        app = App.get_running_app()
+
+        source_id = str(
+            source_id
+        ).strip()
+
+        if selected:
+
+            app.selected_sources.add(
+                source_id
+            )
+
+        else:
+
+            app.selected_sources.discard(
+                source_id
+            )
+
+    # -----------------------------------------------------
+    # ВЫБРАТЬ ВСЕ
+    # -----------------------------------------------------
+
+    def select_all_sources(
+        self
+    ):
+
+        app = App.get_running_app()
+
+        app.selected_sources = set(
+            app.available_sources
+        )
+
+    # -----------------------------------------------------
+    # СНЯТЬ ВСЕ
+    # -----------------------------------------------------
+
+    def clear_all_sources(
+        self
+    ):
+
+        app = App.get_running_app()
+
+        app.selected_sources = set()
+
+    # -----------------------------------------------------
+    # СОХРАНЕНИЕ
+    # -----------------------------------------------------
+
+    def save_settings(
+        self,
+        question_count=None,
+        test_minutes=None,
+        pass_percent=None
+    ):
+
+        app = App.get_running_app()
+
+        if not app.selected_sources:
+
+            self.message = (
+                "Выберите хотя бы один "
+                "источник вопросов"
+            )
+
+            return False
+
+        try:
+
+            if question_count is not None:
+
+                question_count = int(
+                    question_count
+                )
+
+                if question_count <= 0:
+                    raise ValueError
+
+                app.question_count = (
+                    question_count
+                )
+
+            if test_minutes is not None:
+
+                test_minutes = int(
+                    test_minutes
+                )
+
+                if test_minutes <= 0:
+                    raise ValueError
+
+                app.test_minutes = (
+                    test_minutes
+                )
+
+            if pass_percent is not None:
+
+                pass_percent = int(
+                    pass_percent
+                )
+
+                if not (
+                    1
+                    <=
+                    pass_percent
+                    <=
+                    100
+                ):
+
+                    raise ValueError
+
+                app.pass_percent = (
+                    pass_percent
+                )
+
+        except (
+            TypeError,
+            ValueError
+        ):
+
+            self.message = (
+                "Проверьте значения настроек"
+            )
+
+            return False
+
+        app.save_settings()
+
+        self.message = (
+            "Настройки сохранены"
+        )
+
+        return True
+
+    # -----------------------------------------------------
+    # BACK
+    # -----------------------------------------------------
+
+    def go_back(
+        self
+    ):
+
+        self.manager.current = (
+            "login"
+        )
 
 
 # =========================================================
@@ -1150,9 +1829,27 @@ class TechProfiApp(App):
 
     title = APP_NAME
 
-    def __init__(self, **kwargs):
+    # Эти свойства доступны из KV.
+    question_count = NumericProperty(
+        DEFAULT_NUM
+    )
 
-        super().__init__(**kwargs)
+    test_minutes = NumericProperty(
+        DEFAULT_MINUTES
+    )
+
+    pass_percent = NumericProperty(
+        DEFAULT_PASS_PERCENT
+    )
+
+    def __init__(
+        self,
+        **kwargs
+    ):
+
+        super().__init__(
+            **kwargs
+        )
 
         self.bank_name = ""
 
@@ -1165,11 +1862,24 @@ class TechProfiApp(App):
 
         self.seconds = 0
 
-    def build(self):
+        self.available_sources = []
+        self.selected_sources = set()
+
+        self.settings_path = None
+
+    # -----------------------------------------------------
+    # BUILD
+    # -----------------------------------------------------
+
+    def build(
+        self
+    ):
 
         self.bank_name, self.pool = (
             load_bank()
         )
+
+        self.collect_sources()
 
         try:
 
@@ -1178,47 +1888,376 @@ class TechProfiApp(App):
             )
 
         except Exception:
+
             pass
 
         return Builder.load_file(
             str(KV_PATH)
         )
 
-    def on_start(self):
+    # -----------------------------------------------------
+    # START
+    # -----------------------------------------------------
+
+    def on_start(
+        self
+    ):
+
+        # user_data_dir уже корректно указывает
+        # на приватную папку приложения Android.
+        self.settings_path = (
+            Path(self.user_data_dir)
+            /
+            "settings.json"
+        )
+
+        self.load_settings()
 
         if not self.root:
             return
 
         try:
 
-            login = self.root.get_screen(
-                "login"
+            login = (
+                self.root.get_screen(
+                    "login"
+                )
             )
 
-            login.bank = self.bank_name
+            login.bank = (
+                self.bank_name
+            )
 
         except Exception:
+
             pass
 
-    def prepare_questions(self):
+    # -----------------------------------------------------
+    # СОБРАТЬ ИСТОЧНИКИ
+    # -----------------------------------------------------
 
-        self.questions = list(
-            self.pool
+    def collect_sources(
+        self
+    ):
+
+        sources = []
+
+        for question in self.pool:
+
+            source_id = (
+                get_question_source_id(
+                    question,
+                    self.bank_name
+                )
+            )
+
+            if (
+                source_id
+                and
+                source_id
+                not in sources
+            ):
+
+                sources.append(
+                    source_id
+                )
+
+        # Если в банке пока один bank_name,
+        # он тоже обязательно присутствует.
+        if (
+            self.bank_name
+            and
+            self.bank_name
+            not in sources
+        ):
+
+            sources.append(
+                self.bank_name
+            )
+
+        self.available_sources = (
+            sources
         )
+
+        # По умолчанию ВСЕ источники включены.
+        self.selected_sources = set(
+            sources
+        )
+
+    # -----------------------------------------------------
+    # LOAD SETTINGS
+    # -----------------------------------------------------
+
+    def load_settings(
+        self
+    ):
+
+        # Значения по умолчанию.
+        self.question_count = (
+            DEFAULT_NUM
+        )
+
+        self.test_minutes = (
+            DEFAULT_MINUTES
+        )
+
+        self.pass_percent = (
+            DEFAULT_PASS_PERCENT
+        )
+
+        # Все источники выбраны по умолчанию.
+        self.selected_sources = set(
+            self.available_sources
+        )
+
+        if not self.settings_path:
+            return
+
+        if not self.settings_path.exists():
+            return
+
+        try:
+
+            with self.settings_path.open(
+                "r",
+                encoding="utf-8"
+            ) as file:
+
+                data = json.load(
+                    file
+                )
+
+            self.question_count = max(
+                1,
+                int(
+                    data.get(
+                        "question_count",
+                        DEFAULT_NUM
+                    )
+                )
+            )
+
+            self.test_minutes = max(
+                1,
+                int(
+                    data.get(
+                        "test_minutes",
+                        DEFAULT_MINUTES
+                    )
+                )
+            )
+
+            self.pass_percent = max(
+                1,
+                min(
+                    100,
+                    int(
+                        data.get(
+                            "pass_percent",
+                            DEFAULT_PASS_PERCENT
+                        )
+                    )
+                )
+            )
+
+            saved_sources = set(
+                data.get(
+                    "selected_sources",
+                    []
+                )
+            )
+
+            known_sources_at_save = set(
+                data.get(
+                    "known_sources",
+                    []
+                )
+            )
+
+            current_sources = set(
+                self.available_sources
+            )
+
+            # Новые документы, которых ещё не было
+            # при предыдущем сохранении, включаются
+            # автоматически.
+            new_sources = (
+                current_sources
+                -
+                known_sources_at_save
+            )
+
+            selected = (
+                saved_sources
+                &
+                current_sources
+            )
+
+            selected.update(
+                new_sources
+            )
+
+            # Для старого settings.json без known_sources
+            # при первом обновлении не отключаем весь банк.
+            if (
+                not known_sources_at_save
+                and
+                not saved_sources
+            ):
+
+                selected = set(
+                    current_sources
+                )
+
+            self.selected_sources = (
+                selected
+            )
+
+        except Exception:
+
+            # Повреждённые настройки не должны
+            # мешать запуску приложения.
+            self.question_count = (
+                DEFAULT_NUM
+            )
+
+            self.test_minutes = (
+                DEFAULT_MINUTES
+            )
+
+            self.pass_percent = (
+                DEFAULT_PASS_PERCENT
+            )
+
+            self.selected_sources = set(
+                self.available_sources
+            )
+
+    # -----------------------------------------------------
+    # SAVE SETTINGS
+    # -----------------------------------------------------
+
+    def save_settings(
+        self
+    ):
+
+        if not self.settings_path:
+
+            self.settings_path = (
+                Path(self.user_data_dir)
+                /
+                "settings.json"
+            )
+
+        data = {
+
+            "question_count":
+                int(
+                    self.question_count
+                ),
+
+            "test_minutes":
+                int(
+                    self.test_minutes
+                ),
+
+            "pass_percent":
+                int(
+                    self.pass_percent
+                ),
+
+            "selected_sources":
+                sorted(
+                    self.selected_sources
+                ),
+
+            "known_sources":
+                sorted(
+                    self.available_sources
+                )
+        }
+
+        try:
+
+            self.settings_path.parent.mkdir(
+                parents=True,
+                exist_ok=True
+            )
+
+            with self.settings_path.open(
+                "w",
+                encoding="utf-8"
+            ) as file:
+
+                json.dump(
+                    data,
+                    file,
+                    ensure_ascii=False,
+                    indent=2
+                )
+
+            return True
+
+        except Exception:
+
+            return False
+
+    # -----------------------------------------------------
+    # PREPARE QUESTIONS
+    # -----------------------------------------------------
+
+    def prepare_questions(
+        self
+    ):
+
+        # Сначала фильтруем банк
+        # по выбранным источникам.
+        filtered = []
+
+        for question in self.pool:
+
+            source_id = (
+                get_question_source_id(
+                    question,
+                    self.bank_name
+                )
+            )
+
+            if (
+                source_id
+                in
+                self.selected_sources
+            ):
+
+                filtered.append(
+                    question
+                )
 
         random.shuffle(
-            self.questions
+            filtered
         )
 
+        # В контрольном режиме применяем
+        # установленное количество вопросов.
         if self.mode == "контроль":
 
             count = min(
-                DEFAULT_NUM,
-                len(self.questions)
+                int(
+                    self.question_count
+                ),
+                len(filtered)
             )
 
             self.questions = (
-                self.questions[:count]
+                filtered[:count]
+            )
+
+        else:
+
+            # В обучении используем все вопросы
+            # выбранных источников.
+            self.questions = (
+                filtered
             )
 
 
