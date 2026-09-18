@@ -20,13 +20,13 @@ from kivy.resources import resource_add_path
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.checkbox import CheckBox
 from kivy.uix.label import Label
-from kivy.uix.screenmanager import Screen
+from kivy.uix.screenmanager import Screen, ScreenManager
 from kivy.uix.textinput import TextInput
 from kivy.uix.togglebutton import ToggleButton
 
 
 # =========================================================
-# ПУТИ
+# ПУТИ И НАСТРОЙКИ
 # =========================================================
 
 BASE = Path(__file__).resolve().parent
@@ -41,11 +41,6 @@ FONT_BOLD_PATH = BASE / "fonts" / "Arial-Bold.ttf"
 
 APP_NAME = "ТехПрофи"
 ADMIN_CODE = "TEST_OVIK"
-
-
-# =========================================================
-# НАСТРОЙКИ ПО УМОЛЧАНИЮ
-# =========================================================
 
 DEFAULT_NUM = 25
 DEFAULT_MINUTES = 15
@@ -64,12 +59,12 @@ LabelBase.register(
 
 
 # =========================================================
-# РАБОТА С НАЗВАНИЯМИ ИСТОЧНИКОВ
+# ИСТОЧНИКИ
 # =========================================================
 
 def clean_source_name(name):
     """
-    Удаляет расширение .dat и лишние пробелы.
+    Убирает расширение .dat и лишние пробелы.
     """
 
     name = str(name or "").strip()
@@ -82,18 +77,14 @@ def clean_source_name(name):
 
 def extract_source_code(text):
     """
-    Пытается получить короткое обозначение документа
-    из полного названия или строки source.
+    Получает идентификатор нормативного документа.
 
-    Примеры:
-    СП 7.13130.2013 ...
+    Например:
+    СП 7.13130.2013 Отопление...
         -> СП 7.13130.2013
 
-    СП 60.13330.2020 ...
+    СП 60.13330.2020 Отопление...
         -> СП 60.13330.2020
-
-    Федеральный закон 384
-        -> Федеральный закон 384
     """
 
     text = clean_source_name(text)
@@ -130,23 +121,18 @@ def extract_source_code(text):
     return text
 
 
-# =========================================================
-# ПОИСК .DAT
-# =========================================================
-
 def discover_dat_sources():
     """
-    Находит все .dat в data/.
+    Автоматически находит все .dat в папке data.
 
-    Возвращает список словарей:
-
-    {
-        "id": "СП 7.13130.2013",
-        "name": "СП 7.13130.2013 Отопление, ...",
-        "filename": "...dat"
-    }
-
-    Название пользователю показывается без .dat.
+    Возвращает:
+    [
+        {
+            "id": "...",
+            "name": "...",
+            "filename": "...dat"
+        }
+    ]
     """
 
     result = []
@@ -155,11 +141,14 @@ def discover_dat_sources():
         return result
 
     try:
+
         files = sorted(
             DATA_DIR.glob("*.dat"),
             key=lambda path: path.name.casefold(),
         )
+
     except Exception:
+
         return result
 
     for path in files:
@@ -219,7 +208,7 @@ def load_bank():
             "Поле 'questions' должно быть списком"
         )
 
-    normalized_questions = []
+    normalized = []
 
     for question in questions:
 
@@ -234,33 +223,24 @@ def load_bank():
         if not item.get("bank_name"):
             item["bank_name"] = bank_name
 
-        normalized_questions.append(
-            item
-        )
+        normalized.append(item)
 
-    return (
-        bank_name,
-        normalized_questions,
-    )
+    return bank_name, normalized
 
-
-# =========================================================
-# ОПРЕДЕЛЕНИЕ ИСТОЧНИКА ВОПРОСА
-# =========================================================
 
 def get_question_source_id(
     question,
     default_bank="",
 ):
     """
-    Определяет, к какому нормативному документу
-    относится вопрос.
+    Определяет источник конкретного вопроса.
 
     Приоритет:
     1. source_id
     2. bank_name
-    3. поле source
-    4. общий bank_name questions.json
+    3. source.document
+    4. source
+    5. bank_name всего questions.json
     """
 
     source_id = str(
@@ -390,9 +370,7 @@ def is_correct(
 # ТИП КЛАВИАТУРЫ
 # =========================================================
 
-def is_numeric_answer(
-    question,
-):
+def is_numeric_answer(question):
 
     correct = question.get(
         "correct",
@@ -426,9 +404,7 @@ def is_numeric_answer(
 
 class MultiAnswerRow(BoxLayout):
 
-    selected = BooleanProperty(
-        False
-    )
+    selected = BooleanProperty(False)
 
     def __init__(
         self,
@@ -524,9 +500,7 @@ class MultiAnswerRow(BoxLayout):
 class Login(Screen):
 
     bank = StringProperty("")
-    admin_enabled = BooleanProperty(
-        False
-    )
+    admin_enabled = BooleanProperty(False)
 
     def on_pre_enter(
         self,
@@ -588,9 +562,7 @@ class Login(Screen):
                 1,
             )
 
-    def open_settings(
-        self,
-    ):
+    def open_settings(self):
 
         self.update_admin_state()
 
@@ -689,9 +661,7 @@ class Test(Screen):
     # START
     # -----------------------------------------------------
 
-    def begin(
-        self,
-    ):
+    def begin(self):
 
         app = App.get_running_app()
 
@@ -703,7 +673,7 @@ class Test(Screen):
         ]
 
         app.seconds = (
-            app.test_minutes * 60
+            int(app.test_minutes) * 60
         )
 
         self.message = ""
@@ -758,9 +728,7 @@ class Test(Screen):
     # CURRENT ANSWER
     # -----------------------------------------------------
 
-    def get_current_answer(
-        self,
-    ):
+    def get_current_answer(self):
 
         app = App.get_running_app()
 
@@ -830,12 +798,10 @@ class Test(Screen):
         return ""
 
     # -----------------------------------------------------
-    # SAVE
+    # SAVE ANSWER
     # -----------------------------------------------------
 
-    def save_current(
-        self,
-    ):
+    def save_current(self):
 
         app = App.get_running_app()
 
@@ -854,9 +820,7 @@ class Test(Screen):
 
         return answer
 
-    def has_answer(
-        self,
-    ):
+    def has_answer(self):
 
         return bool(
             str(
@@ -886,9 +850,7 @@ class Test(Screen):
         self.save_current()
         self.show_source()
 
-    def show_source(
-        self,
-    ):
+    def show_source(self):
 
         app = App.get_running_app()
 
@@ -911,12 +873,12 @@ class Test(Screen):
             dict,
         ):
 
-            document = str(
+            document = clean_source_name(
                 source.get(
                     "document",
                     "",
                 )
-            ).strip()
+            )
 
             section = str(
                 source.get(
@@ -943,24 +905,20 @@ class Test(Screen):
             ]
 
             self.source = (
-                "\n\n".join(
-                    parts
-                )
+                "\n\n".join(parts)
             )
 
         else:
 
-            self.source = str(
-                source or ""
-            ).strip()
+            self.source = clean_source_name(
+                source
+            )
 
     # -----------------------------------------------------
     # RENDER
     # -----------------------------------------------------
 
-    def render(
-        self,
-    ):
+    def render(self):
 
         app = App.get_running_app()
 
@@ -1004,6 +962,7 @@ class Test(Screen):
             )
 
         else:
+
             self.timer = ""
 
         answers_box = (
@@ -1396,9 +1355,7 @@ class Test(Screen):
     # NEXT
     # -----------------------------------------------------
 
-    def next(
-        self,
-    ):
+    def next(self):
 
         app = App.get_running_app()
 
@@ -1434,9 +1391,7 @@ class Test(Screen):
     # PREVIOUS
     # -----------------------------------------------------
 
-    def prev(
-        self,
-    ):
+    def prev(self):
 
         app = App.get_running_app()
 
@@ -1455,9 +1410,7 @@ class Test(Screen):
     # CORRECT ANSWER
     # -----------------------------------------------------
 
-    def show_correct(
-        self,
-    ):
+    def show_correct(self):
 
         app = App.get_running_app()
 
@@ -1518,9 +1471,7 @@ class Test(Screen):
     # FINISH
     # -----------------------------------------------------
 
-    def finish(
-        self,
-    ):
+    def finish(self):
 
         app = App.get_running_app()
 
@@ -1554,7 +1505,7 @@ class Test(Screen):
         required_score = math.ceil(
             len(app.questions)
             *
-            app.pass_percent
+            int(app.pass_percent)
             /
             100
         )
@@ -1582,9 +1533,8 @@ class Test(Screen):
             f"Результат: "
             f"{score} из "
             f"{len(app.questions)}\n\n"
-            f"Для успешного прохождения: "
-            f"{app.pass_percent}% "
-            f"({required_score} правильных)\n\n"
+            f"Условие успешного прохождения: "
+            f"{int(app.pass_percent)}%\n\n"
             f"{status}"
         )
 
@@ -1618,64 +1568,171 @@ class AdminSettings(Screen):
         self.load_values()
 
     # -----------------------------------------------------
-    # LOAD
+    # LOAD VALUES
     # -----------------------------------------------------
 
-    def load_values(
-        self,
-    ):
+    def load_values(self):
 
         self.message = ""
 
+        app = App.get_running_app()
+
+        if "question_count" in self.ids:
+
+            self.ids.question_count.text = (
+                str(
+                    int(
+                        app.question_count
+                    )
+                )
+            )
+
+        if "test_minutes" in self.ids:
+
+            self.ids.test_minutes.text = (
+                str(
+                    int(
+                        app.test_minutes
+                    )
+                )
+            )
+
+        if "pass_percent" in self.ids:
+
+            self.ids.pass_percent.text = (
+                str(
+                    int(
+                        app.pass_percent
+                    )
+                )
+            )
+
+        Clock.schedule_once(
+            self.build_source_rows,
+            0,
+        )
+
     # -----------------------------------------------------
-    # СПИСОК ИСТОЧНИКОВ
+    # BUILD SOURCES
     # -----------------------------------------------------
 
-    def get_sources(
+    def build_source_rows(
         self,
+        *args,
     ):
+        """
+        Создаёт список нормативных документов
+        обычными Kivy-виджетами.
+
+        RecycleView не используется.
+        """
+
+        if "sources_box" not in self.ids:
+            return
 
         app = App.get_running_app()
 
-        result = []
+        box = self.ids.sources_box
+        box.clear_widgets()
 
         for source in (
             app.source_catalog
         ):
 
             source_id = source["id"]
+            source_name = source["name"]
 
-            result.append(
-                {
-                    "id": source_id,
-                    "name": source["name"],
-                    "filename":
-                        source["filename"],
-                    "selected":
-                        source_id
-                        in app.selected_sources,
-                }
+            row = BoxLayout(
+                orientation="horizontal",
+                size_hint_y=None,
+                height=dp(78),
+                spacing=dp(8),
+                padding=(
+                    dp(8),
+                    dp(6),
+                ),
             )
 
-        return result
+            checkbox = CheckBox(
+                active=(
+                    source_id
+                    in
+                    app.selected_sources
+                ),
+                size_hint_x=None,
+                width=dp(42),
+                color=(
+                    .20,
+                    .16,
+                    .12,
+                    1,
+                ),
+            )
+
+            label = Label(
+                text=source_name,
+                font_name="AppArial",
+                font_size="14sp",
+                color=(
+                    .08,
+                    .07,
+                    .06,
+                    1,
+                ),
+                halign="left",
+                valign="middle",
+            )
+
+            label.bind(
+                size=self._update_source_label
+            )
+
+            checkbox.bind(
+                active=lambda cb, value, sid=source_id:
+                self.on_source_checkbox(
+                    sid,
+                    value,
+                )
+            )
+
+            row.add_widget(
+                checkbox
+            )
+
+            row.add_widget(
+                label
+            )
+
+            box.add_widget(
+                row
+            )
+
+        self.update_select_all_checkbox()
+
+    def _update_source_label(
+        self,
+        label,
+        size,
+    ):
+
+        label.text_size = (
+            size[0],
+            None,
+        )
 
     # -----------------------------------------------------
-    # ВКЛЮЧИТЬ / ВЫКЛЮЧИТЬ
+    # ONE SOURCE
     # -----------------------------------------------------
 
-    def set_source_selected(
+    def on_source_checkbox(
         self,
         source_id,
-        selected,
+        active,
     ):
 
         app = App.get_running_app()
 
-        source_id = str(
-            source_id
-        ).strip()
-
-        if selected:
+        if active:
 
             app.selected_sources.add(
                 source_id
@@ -1687,47 +1744,64 @@ class AdminSettings(Screen):
                 source_id
             )
 
+        self.update_select_all_checkbox()
+
     # -----------------------------------------------------
-    # ВСЕ ИСТОЧНИКИ
+    # SELECT ALL
     # -----------------------------------------------------
 
-    def select_all_sources(
+    def update_select_all_checkbox(
         self,
     ):
 
-        app = App.get_running_app()
-
-        app.selected_sources = {
-            item["id"]
-            for item
-            in app.source_catalog
-        }
-
-    def clear_all_sources(
-        self,
-    ):
+        if "all_sources" not in self.ids:
+            return
 
         app = App.get_running_app()
 
-        app.selected_sources = set()
-
-    def all_sources_selected(
-        self,
-    ):
-
-        app = App.get_running_app()
-
-        if not app.available_sources:
-            return False
-
-        return set(
+        all_selected = bool(
+            app.available_sources
+        ) and set(
             app.available_sources
         ).issubset(
             app.selected_sources
         )
 
+        checkbox = (
+            self.ids.all_sources
+        )
+
+        if (
+            checkbox.active
+            !=
+            all_selected
+        ):
+
+            checkbox.active = (
+                all_selected
+            )
+
+    def toggle_all_sources(
+        self,
+        active,
+    ):
+
+        app = App.get_running_app()
+
+        if active:
+
+            app.selected_sources = set(
+                app.available_sources
+            )
+
+        else:
+
+            app.selected_sources = set()
+
+        self.build_source_rows()
+
     # -----------------------------------------------------
-    # SAVE
+    # SAVE SETTINGS
     # -----------------------------------------------------
 
     def save_settings(
@@ -1750,50 +1824,32 @@ class AdminSettings(Screen):
 
         try:
 
-            if question_count is not None:
+            question_count = int(
+                question_count
+            )
 
-                question_count = int(
-                    question_count
-                )
+            test_minutes = int(
+                test_minutes
+            )
 
-                if question_count <= 0:
-                    raise ValueError
+            pass_percent = int(
+                pass_percent
+            )
 
-                app.question_count = (
-                    question_count
-                )
+            if question_count <= 0:
+                raise ValueError
 
-            if test_minutes is not None:
+            if test_minutes <= 0:
+                raise ValueError
 
-                test_minutes = int(
-                    test_minutes
-                )
-
-                if test_minutes <= 0:
-                    raise ValueError
-
-                app.test_minutes = (
-                    test_minutes
-                )
-
-            if pass_percent is not None:
-
-                pass_percent = int(
-                    pass_percent
-                )
-
-                if not (
-                    1
-                    <=
-                    pass_percent
-                    <=
-                    100
-                ):
-                    raise ValueError
-
-                app.pass_percent = (
-                    pass_percent
-                )
+            if not (
+                1
+                <=
+                pass_percent
+                <=
+                100
+            ):
+                raise ValueError
 
         except (
             TypeError,
@@ -1806,7 +1862,19 @@ class AdminSettings(Screen):
 
             return False
 
-        if app.save_settings():
+        app.question_count = (
+            question_count
+        )
+
+        app.test_minutes = (
+            test_minutes
+        )
+
+        app.pass_percent = (
+            pass_percent
+        )
+
+        if app.save_user_settings():
 
             self.message = (
                 "Настройки сохранены"
@@ -1824,9 +1892,7 @@ class AdminSettings(Screen):
     # BACK
     # -----------------------------------------------------
 
-    def go_back(
-        self,
-    ):
+    def go_back(self):
 
         self.manager.current = (
             "login"
@@ -1873,13 +1939,8 @@ class TechProfiApp(App):
 
         self.seconds = 0
 
-        # Полный каталог .dat
         self.source_catalog = []
-
-        # Только ID документов
         self.available_sources = []
-
-        # Выбранные ID
         self.selected_sources = set()
 
         self.settings_path = None
@@ -1888,15 +1949,12 @@ class TechProfiApp(App):
     # BUILD
     # -----------------------------------------------------
 
-    def build(
-        self,
-    ):
+    def build(self):
 
         self.bank_name, self.pool = (
             load_bank()
         )
 
-        # Находим все .dat в data/
         self.collect_sources()
 
         try:
@@ -1908,25 +1966,58 @@ class TechProfiApp(App):
         except Exception:
             pass
 
-        return Builder.load_file(
+        # ВАЖНО:
+        # testov.kv теперь содержит только правила
+        # <Login>, <Test>, <Result>, <AdminSettings>.
+        #
+        # Корневого ScreenManager в KV больше нет.
+        Builder.load_file(
             str(KV_PATH)
         )
+
+        manager = ScreenManager()
+
+        manager.add_widget(
+            Login(
+                name="login"
+            )
+        )
+
+        manager.add_widget(
+            Test(
+                name="test"
+            )
+        )
+
+        manager.add_widget(
+            Result(
+                name="result"
+            )
+        )
+
+        manager.add_widget(
+            AdminSettings(
+                name="settings"
+            )
+        )
+
+        return manager
 
     # -----------------------------------------------------
     # START
     # -----------------------------------------------------
 
-    def on_start(
-        self,
-    ):
+    def on_start(self):
 
         self.settings_path = (
-            Path(self.user_data_dir)
+            Path(
+                self.user_data_dir
+            )
             /
             "settings.json"
         )
 
-        self.load_settings()
+        self.load_user_settings()
 
         if not self.root:
             return
@@ -1947,31 +2038,17 @@ class TechProfiApp(App):
             pass
 
     # -----------------------------------------------------
-    # ИСТОЧНИКИ
+    # COLLECT SOURCES
     # -----------------------------------------------------
 
-    def collect_sources(
-        self,
-    ):
-        """
-        Основной источник списка документов —
-        файлы data/*.dat.
-
-        Например:
-
-        data/
-        ├── СП 7.13130.2013 ... .dat
-        ├── СП 60.13330.2020 ... .dat
-        └── Федеральный закон 384.dat
-        """
+    def collect_sources(self):
 
         self.source_catalog = (
             discover_dat_sources()
         )
 
-        # Если по какой-либо причине .dat
-        # не найдены, не ломаем приложение.
-        # Используем bank_name из questions.json.
+        # Если .dat не найдены,
+        # приложение всё равно не падает.
         if (
             not self.source_catalog
             and
@@ -1995,34 +2072,41 @@ class TechProfiApp(App):
                 }
             ]
 
+        unique_catalog = []
+        used_ids = set()
+
+        for source in (
+            self.source_catalog
+        ):
+
+            source_id = source["id"]
+
+            if not source_id:
+                continue
+
+            if source_id in used_ids:
+                continue
+
+            used_ids.add(
+                source_id
+            )
+
+            unique_catalog.append(
+                source
+            )
+
+        self.source_catalog = (
+            unique_catalog
+        )
+
         self.available_sources = [
-            item["id"]
-            for item
+            source["id"]
+            for source
             in self.source_catalog
         ]
 
-        # Убираем возможные дубли ID.
-        unique_sources = []
-
-        for source_id in (
-            self.available_sources
-        ):
-
-            if (
-                source_id
-                and
-                source_id
-                not in unique_sources
-            ):
-                unique_sources.append(
-                    source_id
-                )
-
-        self.available_sources = (
-            unique_sources
-        )
-
-        # По умолчанию выбраны ВСЕ.
+        # При первой установке
+        # выбраны все документы.
         self.selected_sources = set(
             self.available_sources
         )
@@ -2031,9 +2115,7 @@ class TechProfiApp(App):
     # LOAD SETTINGS
     # -----------------------------------------------------
 
-    def load_settings(
-        self,
-    ):
+    def load_user_settings(self):
 
         self.question_count = (
             DEFAULT_NUM
@@ -2047,8 +2129,6 @@ class TechProfiApp(App):
             DEFAULT_PASS_PERCENT
         )
 
-        # При первой установке —
-        # ВСЕ источники включены.
         self.selected_sources = set(
             self.available_sources
         )
@@ -2121,14 +2201,14 @@ class TechProfiApp(App):
                 )
             )
 
-            # То, что пользователь выбирал раньше.
+            # Сохраняем предыдущий выбор
             selected = (
                 saved_sources
                 &
                 current_sources
             )
 
-            # Новые .dat автоматически включаются.
+            # Новые .dat включаем автоматически
             new_sources = (
                 current_sources
                 -
@@ -2139,12 +2219,14 @@ class TechProfiApp(App):
                 new_sources
             )
 
-            # Совместимость со старым файлом настроек.
+            # Совместимость с первой версией
+            # settings.json
             if (
                 not known_sources
                 and
                 not saved_sources
             ):
+
                 selected = set(
                     current_sources
                 )
@@ -2155,8 +2237,8 @@ class TechProfiApp(App):
 
         except Exception:
 
-            # Повреждённый settings.json
-            # не должен ломать приложение.
+            # Повреждённые настройки
+            # не должны приводить к вылету.
             self.question_count = (
                 DEFAULT_NUM
             )
@@ -2177,14 +2259,14 @@ class TechProfiApp(App):
     # SAVE SETTINGS
     # -----------------------------------------------------
 
-    def save_settings(
-        self,
-    ):
+    def save_user_settings(self):
 
         if not self.settings_path:
 
             self.settings_path = (
-                Path(self.user_data_dir)
+                Path(
+                    self.user_data_dir
+                )
                 /
                 "settings.json"
             )
@@ -2246,13 +2328,7 @@ class TechProfiApp(App):
     # PREPARE QUESTIONS
     # -----------------------------------------------------
 
-    def prepare_questions(
-        self,
-    ):
-        """
-        Фильтрует вопросы questions.json
-        по выбранным нормативным документам.
-        """
+    def prepare_questions(self):
 
         filtered = []
 
@@ -2270,6 +2346,7 @@ class TechProfiApp(App):
                 in
                 self.selected_sources
             ):
+
                 filtered.append(
                     question
                 )
@@ -2293,8 +2370,9 @@ class TechProfiApp(App):
 
         else:
 
-            # В обучении таймера нет,
-            # но фильтр выбранных источников работает.
+            # В режиме обучения таймера нет.
+            # Используются все вопросы
+            # выбранных источников.
             self.questions = (
                 filtered
             )
