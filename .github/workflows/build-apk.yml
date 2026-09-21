@@ -27,7 +27,7 @@ jobs:
       # 2. PYTHON
       # ============================================================
 
-      - name: Set up Python 3.11
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -37,7 +37,7 @@ jobs:
       # 3. JAVA
       # ============================================================
 
-      - name: Set up Java 17
+      - name: Set up Java
         uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -45,7 +45,7 @@ jobs:
 
 
       # ============================================================
-      # 4. SYSTEM DEPENDENCIES
+      # 4. SYSTEM PACKAGES
       # ============================================================
 
       - name: Install system dependencies
@@ -80,7 +80,7 @@ jobs:
 
 
       # ============================================================
-      # 5. INSTALL BUILDOZER
+      # 5. BUILDOZER
       # ============================================================
 
       - name: Install Buildozer
@@ -95,9 +95,9 @@ jobs:
             "Cython==0.29.36" \
             "buildozer==1.5.0"
 
-          echo "================================"
+          echo "=============================="
           echo "VERSIONS"
-          echo "================================"
+          echo "=============================="
 
           python --version
           java -version
@@ -106,10 +106,10 @@ jobs:
 
 
       # ============================================================
-      # 6. CONFIGURE PYTHON-FOR-ANDROID
+      # 6. FIX BUILDOZER SPEC
       # ============================================================
 
-      - name: Configure python-for-android
+      - name: Prepare buildozer.spec
         run: |
           set -euxo pipefail
 
@@ -118,326 +118,100 @@ jobs:
 
           path = Path("buildozer.spec")
 
-          text = path.read_text(
-              encoding="utf-8"
-          )
+          if not path.exists():
+              raise RuntimeError("buildozer.spec not found")
 
-          new_lines = []
+          text = path.read_text(encoding="utf-8")
+
+          lines = []
 
           for line in text.splitlines():
 
               stripped = line.strip()
 
+              # Remove old forced p4a branch.
               if stripped.startswith("p4a.branch"):
                   continue
 
-              if stripped.startswith("android.sdk_path"):
+              # Force one architecture for diagnostic build.
+              if stripped.startswith("android.archs"):
+                  lines.append("android.archs = arm64-v8a")
                   continue
 
-              if stripped.startswith("android.ndk_path"):
+              # Keep Android API fixed.
+              if stripped.startswith("android.api"):
+                  lines.append("android.api = 35")
                   continue
 
-              new_lines.append(line)
+              if stripped.startswith("android.minapi"):
+                  lines.append("android.minapi = 23")
+                  continue
 
-          text = "\n".join(new_lines) + "\n"
+              lines.append(line)
 
-          marker = "[buildozer]"
-
-          if marker not in text:
-              raise RuntimeError(
-                  "Section [buildozer] not found in buildozer.spec"
-              )
-
-          text = text.replace(
-              marker,
-              "\n"
-              "# Fixed python-for-android version\n"
-              "p4a.branch = v2024.01.21\n"
-              "\n"
-              + marker,
-              1,
-          )
+          text = "\n".join(lines) + "\n"
 
           path.write_text(
               text,
-              encoding="utf-8"
+              encoding="utf-8",
           )
 
-          print("buildozer.spec updated")
+          print("buildozer.spec prepared")
           PY
 
-          echo "================================"
-          echo "P4A CONFIGURATION"
-          echo "================================"
+          echo "=============================="
+          echo "ANDROID CONFIGURATION"
+          echo "=============================="
 
-          grep -n \
-            "p4a.branch" \
-            buildozer.spec
+          grep -E \
+            "^(requirements|android.api|android.minapi|android.archs|p4a.branch)" \
+            buildozer.spec || true
 
 
       # ============================================================
-      # 7. PREPARE ANDROID SDK
+      # 7. CLEAN EVERYTHING
       # ============================================================
 
-      - name: Prepare Android SDK
+      - name: Clean old Android build
         run: |
           set -euxo pipefail
 
-          SDK_DIR="$HOME/.buildozer/android/platform/android-sdk"
-          ZIP_FILE="$RUNNER_TEMP/android-command-line-tools.zip"
-          TEMP_DIR="$RUNNER_TEMP/android-command-line-tools"
-          SDKMANAGER="$SDK_DIR/cmdline-tools/latest/bin/sdkmanager"
-
-          echo "================================"
-          echo "PREPARING ANDROID SDK"
-          echo "================================"
-
-          rm -rf "$SDK_DIR"
-          rm -rf "$TEMP_DIR"
-
-          mkdir -p "$SDK_DIR/cmdline-tools"
-          mkdir -p "$SDK_DIR/licenses"
-          mkdir -p "$TEMP_DIR"
-
-          wget -q \
-            https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip \
-            -O "$ZIP_FILE"
-
-          unzip -q \
-            "$ZIP_FILE" \
-            -d "$TEMP_DIR"
-
-          mv \
-            "$TEMP_DIR/cmdline-tools" \
-            "$SDK_DIR/cmdline-tools/latest"
-
-          # Buildozer 1.5 compatibility
-          mkdir -p "$SDK_DIR/tools"
-
-          ln -s \
-            "$SDK_DIR/cmdline-tools/latest/bin" \
-            "$SDK_DIR/tools/bin"
-
-          ln -s \
-            "$SDK_DIR/cmdline-tools/latest/lib" \
-            "$SDK_DIR/tools/lib"
-
-          ln -s \
-            "$SDK_DIR/cmdline-tools/latest/source.properties" \
-            "$SDK_DIR/tools/source.properties"
-
-          # Android licenses
-          echo \
-            "8933bad161af4178b1185d1a37fbf41ea5269c55" \
-            > "$SDK_DIR/licenses/android-sdk-license"
-
-          echo \
-            "d56f5187479451eabf01fb78af6dfcb131a6481e" \
-            >> "$SDK_DIR/licenses/android-sdk-license"
-
-          echo \
-            "24333f8a63b6825ea9c5514f83c2829b004d1fee" \
-            > "$SDK_DIR/licenses/android-sdk-preview-license"
-
-          echo "================================"
-          echo "SDKMANAGER CHECK"
-          echo "================================"
-
-          test -x "$SDKMANAGER"
-          test -x "$SDK_DIR/tools/bin/sdkmanager"
-
-          "$SDKMANAGER" \
-            --sdk_root="$SDK_DIR" \
-            --version
-
-          yes | \
-            "$SDKMANAGER" \
-            --sdk_root="$SDK_DIR" \
-            --licenses \
-            >/dev/null || true
-
-          "$SDKMANAGER" \
-            --sdk_root="$SDK_DIR" \
-            "platform-tools" \
-            "platforms;android-35" \
-            "build-tools;35.0.0"
-
-          echo "================================"
-          echo "VERIFY ANDROID PACKAGES"
-          echo "================================"
-
-          test -f \
-            "$SDK_DIR/platforms/android-35/android.jar"
-
-          test -x \
-            "$SDK_DIR/build-tools/35.0.0/aidl"
-
-          test -x \
-            "$SDK_DIR/platform-tools/adb"
-
-          test -d \
-            "$SDK_DIR/licenses"
-
-          echo "ANDROID SDK CHECK PASSED"
-
-
-      # ============================================================
-      # 8. FULL CLEAN
-      # ============================================================
-
-      - name: Full clean previous project build
-        run: |
-          set -euxo pipefail
-
-          echo "================================"
-          echo "FULL CLEAN PROJECT BUILD"
-          echo "================================"
+          echo "=============================="
+          echo "FULL CLEAN"
+          echo "=============================="
 
           rm -rf .buildozer
           rm -rf bin
-          rm -rf patches
 
           mkdir -p bin
-          mkdir -p patches
 
-          test ! -d .buildozer
-          test -d bin
-
-          echo "================================"
-          echo "PROJECT BUILD CACHE REMOVED"
-          echo "================================"
+          echo "Project build cache removed."
 
 
       # ============================================================
-      # 9. PREPARE UUID PATCH
+      # 8. VERIFY PROJECT
       # ============================================================
 
-      - name: Prepare Python uuid patch
+      - name: Verify project files
         run: |
           set -euxo pipefail
 
-          cat > patches/patch_python_uuid.py <<'PY'
-          from pathlib import Path
-
-          root = Path(".buildozer")
-
-          if not root.exists():
-              print("ERROR: .buildozer directory does not exist")
-              raise SystemExit(1)
-
-          candidates = {
-              "setup.py",
-              "Setup",
-              "Setup.local",
-              "Makefile",
-              "Makefile.pre",
-              "Makefile.pre.in",
-          }
-
-          changed = 0
-
-          for path in root.rglob("*"):
-
-              if not path.is_file():
-                  continue
-
-              if path.name not in candidates:
-                  continue
-
-              try:
-                  text = path.read_text(
-                      encoding="utf-8",
-                      errors="ignore",
-                  )
-              except Exception:
-                  continue
-
-              if "-luuid" not in text:
-                  continue
-
-              print("FOUND -luuid:", path)
-
-              new_text = text.replace(
-                  "-luuid",
-                  "",
-              )
-
-              path.write_text(
-                  new_text,
-                  encoding="utf-8",
-              )
-
-              changed += 1
-
-              print("PATCHED:", path)
-
-          print("--------------------------------")
-          print("Files patched:", changed)
-          print("--------------------------------")
-          PY
-
-          echo "UUID patch script created."
-
-
-      # ============================================================
-      # 10. VERIFY APPLICATION FILES
-      # ============================================================
-
-      - name: Verify application files
-        run: |
-          set -euxo pipefail
-
-          echo "================================"
+          echo "=============================="
           echo "PROJECT FILES"
-          echo "================================"
+          echo "=============================="
 
-          pwd
-          ls -la
-
-          echo "--------------------------------"
-          echo "BUILDOZER SPEC"
-          echo "--------------------------------"
-
+          test -f main.py
+          test -f testov.kv
           test -f buildozer.spec
-
-          grep -E \
-            "^(title|package.name|package.domain|source.dir|source.include_exts|requirements|android.api|android.minapi|android.archs|p4a.branch)" \
-            buildozer.spec || true
-
-          echo "--------------------------------"
-          echo "PYTHON FILES"
-          echo "--------------------------------"
-
-          find . \
-            -maxdepth 2 \
-            -type f \
-            -name "*.py" \
-            -print
-
-          echo "--------------------------------"
-          echo "KV FILES"
-          echo "--------------------------------"
-
-          find . \
-            -maxdepth 2 \
-            -type f \
-            -name "*.kv" \
-            -print
-
-          echo "--------------------------------"
-          echo "DATA DIRECTORY"
-          echo "--------------------------------"
-
           test -d data
 
+          echo
+          echo "DAT FILES:"
           find data \
             -maxdepth 1 \
             -type f \
+            -name "*.dat" \
             -print
-
-          echo "--------------------------------"
-          echo "DAT FILES"
-          echo "--------------------------------"
 
           DAT_COUNT=$(
             find data \
@@ -447,743 +221,110 @@ jobs:
               | wc -l
           )
 
-          echo "DAT files found: $DAT_COUNT"
-
-          find data \
-            -maxdepth 1 \
-            -type f \
-            -name "*.dat" \
-            -print
+          echo
+          echo "DAT count: $DAT_COUNT"
 
           if [ "$DAT_COUNT" -eq 0 ]; then
-            echo "ERROR: NO .dat FILES FOUND IN data/"
+            echo "ERROR: no DAT files found"
             exit 1
           fi
 
-          echo "--------------------------------"
-          echo "QUESTIONS JSON"
-          echo "--------------------------------"
-
-          test -f data/questions.json
-
-          ls -lh data/questions.json
-
-          echo "================================"
-          echo "APPLICATION FILE CHECK PASSED"
-          echo "================================"
+          echo
+          echo "buildozer.spec:"
+          grep -E \
+            "^(title|package.name|package.domain|requirements|android.api|android.minapi|android.archs)" \
+            buildozer.spec || true
 
 
       # ============================================================
-      # 11. FINAL ENVIRONMENT CHECK
-      # ============================================================
-
-      - name: Final Android environment check
-        run: |
-          set -euxo pipefail
-
-          SDK_DIR="$HOME/.buildozer/android/platform/android-sdk"
-          SDKMANAGER="$SDK_DIR/cmdline-tools/latest/bin/sdkmanager"
-
-          echo "================================"
-          echo "FINAL ANDROID CHECK"
-          echo "================================"
-
-          test -d "$SDK_DIR"
-          test -x "$SDKMANAGER"
-          test -x "$SDK_DIR/tools/bin/sdkmanager"
-
-          test -f \
-            "$SDK_DIR/platforms/android-35/android.jar"
-
-          test -x \
-            "$SDK_DIR/build-tools/35.0.0/aidl"
-
-          test -x \
-            "$SDK_DIR/platform-tools/adb"
-
-          "$SDKMANAGER" \
-            --sdk_root="$SDK_DIR" \
-            --version
-
-          java -version
-          python --version
-          buildozer --version
-
-          echo "================================"
-          echo "ENVIRONMENT READY"
-          echo "================================"
-
-
-      # ============================================================
-      # 12. BUILD APK
-      #
-      # ЛОГИКА:
-      #
-      # 1. Обычная сборка.
-      #
-      # 2. Если сборка успешна -> готово.
-      #
-      # 3. Если ошибка -luuid ->
-      #    исправляем файлы p4a и повторяем сборку.
-      #
-      # 4. Если возникает:
-      #
-      #       ValueError: name is too long
-      #
-      #    НЕ переименовываем файлы.
-      #    Вместо этого анализируем реальные файлы,
-      #    подготовленные Buildozer в:
-      #
-      #       .buildozer/android/app
-      #
+      # 9. BUILD
       # ============================================================
 
       - name: Build APK
         run: |
           set -o pipefail
 
-
-          # --------------------------------------------------------
-          # FUNCTION: LONG NAME DIAGNOSTICS
-          # --------------------------------------------------------
-
-          diagnose_long_names() {
-
-            echo
-            echo "================================================"
-            echo "USTAR NAME LENGTH DIAGNOSIS"
-            echo "================================================"
-            echo
-
-            python - <<'PY'
-          from pathlib import Path
-
-          root = Path(".buildozer/android/app")
-
-          if not root.exists():
-
-              print(
-                  "ERROR: "
-                  ".buildozer/android/app does not exist"
-              )
-
-              raise SystemExit(0)
-
-
-          records = []
-
-
-          for path in root.rglob("*"):
-
-              try:
-
-                  relative = path.relative_to(root)
-
-              except Exception:
-
-                  continue
-
-
-              rel_text = relative.as_posix()
-
-              name_text = path.name
-
-
-              rel_chars = len(rel_text)
-
-              rel_bytes = len(
-                  rel_text.encode("utf-8")
-              )
-
-
-              name_chars = len(name_text)
-
-              name_bytes = len(
-                  name_text.encode("utf-8")
-              )
-
-
-              full_text = str(path)
-
-              full_chars = len(full_text)
-
-              full_bytes = len(
-                  full_text.encode("utf-8")
-              )
-
-
-              records.append(
-                  (
-                      rel_bytes,
-                      name_bytes,
-                      rel_chars,
-                      name_chars,
-                      full_bytes,
-                      full_chars,
-                      rel_text,
-                  )
-              )
-
-
-          records.sort(
-              key=lambda item: item[0],
-              reverse=True,
-          )
-
-
-          print("=" * 78)
-          print("TOP 100 LONGEST RELATIVE PATHS")
-          print("=" * 78)
-          print()
-
-
-          for record in records[:100]:
-
-              (
-                  rel_bytes,
-                  name_bytes,
-                  rel_chars,
-                  name_chars,
-                  full_bytes,
-                  full_chars,
-                  rel_text,
-              ) = record
-
-
-              print(
-                  f"PATH={rel_bytes:4} bytes | "
-                  f"NAME={name_bytes:4} bytes | "
-                  f"PATH_CHARS={rel_chars:4} | "
-                  f"{rel_text}"
-              )
-
-
-          print()
-          print("=" * 78)
-          print("INDIVIDUAL FILE/DIRECTORY NAMES > 100 BYTES")
-          print("=" * 78)
-          print()
-
-
-          long_names = 0
-
-
-          for record in records:
-
-              (
-                  rel_bytes,
-                  name_bytes,
-                  rel_chars,
-                  name_chars,
-                  full_bytes,
-                  full_chars,
-                  rel_text,
-              ) = record
-
-
-              if name_bytes > 100:
-
-                  long_names += 1
-
-                  print(
-                      f"NAME={name_bytes:4} bytes | "
-                      f"PATH={rel_bytes:4} bytes | "
-                      f"{rel_text}"
-                  )
-
-
-          if long_names == 0:
-
-              print(
-                  "No individual file/directory "
-                  "name exceeds 100 UTF-8 bytes."
-              )
-
-
-          print()
-          print("=" * 78)
-          print("RELATIVE PATHS > 100 BYTES")
-          print("=" * 78)
-          print()
-
-
-          long_paths = 0
-
-
-          for record in records:
-
-              (
-                  rel_bytes,
-                  name_bytes,
-                  rel_chars,
-                  name_chars,
-                  full_bytes,
-                  full_chars,
-                  rel_text,
-              ) = record
-
-
-              if rel_bytes > 100:
-
-                  long_paths += 1
-
-                  print(
-                      f"PATH={rel_bytes:4} bytes | "
-                      f"NAME={name_bytes:4} bytes | "
-                      f"{rel_text}"
-                  )
-
-
-          if long_paths == 0:
-
-              print(
-                  "No relative path exceeds "
-                  "100 UTF-8 bytes."
-              )
-
-
-          print()
-          print("=" * 78)
-          print("LONGEST INDIVIDUAL NAMES")
-          print("=" * 78)
-          print()
-
-
-          by_name = sorted(
-              records,
-              key=lambda item: item[1],
-              reverse=True,
-          )
-
-
-          for record in by_name[:50]:
-
-              (
-                  rel_bytes,
-                  name_bytes,
-                  rel_chars,
-                  name_chars,
-                  full_bytes,
-                  full_chars,
-                  rel_text,
-              ) = record
-
-
-              print(
-                  f"NAME={name_bytes:4} bytes | "
-                  f"PATH={rel_bytes:4} bytes | "
-                  f"{rel_text}"
-              )
-
-
-          print()
-          print("=" * 78)
-          print("SUMMARY")
-          print("=" * 78)
-
-          print(
-              "Entries analysed:",
-              len(records)
-          )
-
-          print(
-              "Names > 100 bytes:",
-              long_names
-          )
-
-          print(
-              "Paths > 100 bytes:",
-              long_paths
-          )
-
-          PY
-
-
-            echo
-            echo "================================================"
-            echo "PROJECT DATA FILE DIAGNOSIS"
-            echo "================================================"
-            echo
-
-
-            python - <<'PY'
-          from pathlib import Path
-
-          data = Path("data")
-
-          if not data.exists():
-
-              print("ERROR: data directory not found")
-
-              raise SystemExit(0)
-
-
-          records = []
-
-
-          for path in data.iterdir():
-
-              if not path.is_file():
-                  continue
-
-
-              name = path.name
-
-              name_chars = len(name)
-
-              name_bytes = len(
-                  name.encode("utf-8")
-              )
-
-
-              records.append(
-                  (
-                      name_bytes,
-                      name_chars,
-                      name,
-                  )
-              )
-
-
-          records.sort(
-              reverse=True
-          )
-
-
-          for (
-              name_bytes,
-              name_chars,
-              name,
-          ) in records:
-
-              print(
-                  f"NAME={name_bytes:4} bytes | "
-                  f"CHARS={name_chars:4} | "
-                  f"{name}"
-              )
-
-
-          print()
-          print(
-              "Total data files:",
-              len(records)
-          )
-
-          PY
-
-
-            echo
-            echo "================================================"
-            echo "END OF USTAR DIAGNOSIS"
-            echo "================================================"
-            echo
-          }
-
-
-          # --------------------------------------------------------
-          # FIRST BUILD
-          # --------------------------------------------------------
-
-          echo "================================"
-          echo "FIRST BUILD ATTEMPT"
-          echo "================================"
-
-          set +e
+          echo "=============================="
+          echo "CLEAN APK BUILD"
+          echo "=============================="
 
           buildozer -v android debug \
-            2>&1 | tee first-build.log
-
-          FIRST_RESULT=${PIPESTATUS[0]}
-
-          set -e
-
-
-          echo "================================"
-          echo "FIRST BUILD RESULT: $FIRST_RESULT"
-          echo "================================"
-
-
-          # --------------------------------------------------------
-          # FIRST BUILD SUCCESS
-          # --------------------------------------------------------
-
-          if [ "$FIRST_RESULT" -eq 0 ]; then
-
-            echo "================================"
-            echo "FIRST BUILD SUCCESSFUL"
-            echo "================================"
-
-            cp first-build.log build.log
-
-            exit 0
-
-          fi
-
-
-          # --------------------------------------------------------
-          # NAME TOO LONG ON FIRST BUILD
-          # --------------------------------------------------------
-
-          if grep -q \
-            "ValueError: name is too long" \
-            first-build.log; then
-
-            echo
-            echo "================================"
-            echo "NAME TOO LONG ERROR CONFIRMED"
-            echo "================================"
-
-            diagnose_long_names
-
-            cp first-build.log build.log
-
-            exit "$FIRST_RESULT"
-
-          fi
-
-
-          # --------------------------------------------------------
-          # CHECK OLD -luuid ERROR
-          # --------------------------------------------------------
-
-          echo "================================"
-          echo "CHECKING FOR -luuid ERROR"
-          echo "================================"
-
-
-          if ! grep -q \
-            "unable to find library -luuid" \
-            first-build.log; then
-
-            echo
-            echo "================================"
-            echo "UNKNOWN BUILD ERROR"
-            echo "================================"
-            echo
-
-            echo \
-              "First build failed, but the error is neither" \
-              "'name is too long' nor '-luuid'."
-
-            cp first-build.log build.log
-
-            exit "$FIRST_RESULT"
-
-          fi
-
-
-          echo
-          echo "================================"
-          echo "-luuid ERROR CONFIRMED"
-          echo "================================"
-
-
-          # --------------------------------------------------------
-          # UUID REFERENCES BEFORE PATCH
-          # --------------------------------------------------------
-
-          echo "================================"
-          echo "UUID REFERENCES BEFORE PATCH"
-          echo "================================"
-
-          grep -R -n -- "-luuid" \
-            .buildozer/android/platform/build-* \
-            2>/dev/null \
-            | head -100 || true
-
-
-          # --------------------------------------------------------
-          # PRIMARY UUID PATCH
-          # --------------------------------------------------------
-
-          echo "================================"
-          echo "PATCHING PYTHON UUID"
-          echo "================================"
-
-          python patches/patch_python_uuid.py
-
-
-          # --------------------------------------------------------
-          # SECONDARY UUID CLEANUP
-          # --------------------------------------------------------
-
-          echo "================================"
-          echo "SECONDARY UUID CLEANUP"
-          echo "================================"
-
-
-          while IFS= read -r -d '' file; do
-
-            if grep -Iq . "$file" 2>/dev/null; then
-
-              if grep -q \
-                -- "-luuid" \
-                "$file" \
-                2>/dev/null; then
-
-                echo "Cleaning: $file"
-
-                sed -i \
-                  's/-luuid//g' \
-                  "$file"
-
-              fi
-
-            fi
-
-          done < <(
-            find \
-              .buildozer/android/platform/build-* \
-              -type f \
-              -print0 \
-              2>/dev/null
-          )
-
-
-          # --------------------------------------------------------
-          # UUID REFERENCES AFTER PATCH
-          # --------------------------------------------------------
-
-          echo "================================"
-          echo "UUID REFERENCES AFTER PATCH"
-          echo "================================"
-
-          grep -R -n -- "-luuid" \
-            .buildozer/android/platform/build-* \
-            2>/dev/null \
-            | head -100 || true
-
-
-          # --------------------------------------------------------
-          # SECOND BUILD
-          # --------------------------------------------------------
-
-          echo
-          echo "================================"
-          echo "SECOND BUILD ATTEMPT"
-          echo "================================"
-
-          set +e
-
-          buildozer -v android debug \
-            2>&1 | tee second-build.log
-
-          SECOND_RESULT=${PIPESTATUS[0]}
-
-          set -e
-
-
-          echo "================================"
-          echo "SECOND BUILD RESULT: $SECOND_RESULT"
-          echo "================================"
-
-
-          # --------------------------------------------------------
-          # CREATE COMPLETE LOG
-          # --------------------------------------------------------
-
-          {
-            echo "================================================"
-            echo "FIRST BUILD"
-            echo "================================================"
-
-            cat first-build.log
-
-            echo
-            echo
-
-            echo "================================================"
-            echo "SECOND BUILD AFTER UUID PATCH"
-            echo "================================================"
-
-            cat second-build.log
-
-          } > build.log
-
-
-          # --------------------------------------------------------
-          # SECOND BUILD SUCCESS
-          # --------------------------------------------------------
-
-          if [ "$SECOND_RESULT" -eq 0 ]; then
-
-            echo
-            echo "================================"
-            echo "SECOND BUILD SUCCESSFUL"
-            echo "================================"
-
-            exit 0
-
-          fi
-
-
-          # --------------------------------------------------------
-          # NAME TOO LONG AFTER UUID PATCH
-          # --------------------------------------------------------
-
-          if grep -q \
-            "ValueError: name is too long" \
-            second-build.log; then
-
-            echo
-            echo "================================"
-            echo "NAME TOO LONG AFTER UUID PATCH"
-            echo "================================"
-
-            diagnose_long_names
-
-          fi
-
-
-          exit "$SECOND_RESULT"
+            2>&1 | tee build.log
 
 
       # ============================================================
-      # 13. UPLOAD BUILD LOGS
+      # 10. DEBUG INFORMATION
+      # ============================================================
+
+      - name: Show build diagnostics
+        if: failure()
+        run: |
+          echo "=============================="
+          echo "LAST 300 BUILD LOG LINES"
+          echo "=============================="
+
+          tail -300 build.log || true
+
+          echo
+          echo "=============================="
+          echo "MISSING KIVY C FILE CHECK"
+          echo "=============================="
+
+          find .buildozer \
+            -type f \
+            \( \
+              -name "_img_sdl2.c" \
+              -o -name "_text_sdl2.c" \
+              -o -name "audio_sdl2.c" \
+              -o -name "_clipboard_sdl2.c" \
+            \) \
+            -print \
+            2>/dev/null || true
+
+          echo
+          echo "=============================="
+          echo "KIVY DIRECTORIES"
+          echo "=============================="
+
+          find .buildozer \
+            -type d \
+            -path "*kivy*core*" \
+            -print \
+            2>/dev/null \
+            | head -100 || true
+
+
+      # ============================================================
+      # 11. UPLOAD LOG
       # ============================================================
 
       - name: Upload build log
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: build-log
-          path: |
-            build.log
-            first-build.log
-            second-build.log
+          name: build-log-${{ github.run_number }}
+          path: build.log
           if-no-files-found: ignore
           retention-days: 7
 
 
       # ============================================================
-      # 14. SEARCH FOR APK
+      # 12. FIND APK
       # ============================================================
 
-      - name: Search for APK
-        if: always()
-        run: |
-          echo "================================"
-          echo "SEARCHING FOR APK"
-          echo "================================"
-
-          find . \
-            -type f \
-            -name "*.apk" \
-            -print \
-            2>/dev/null || true
-
-
-      # ============================================================
-      # 15. VERIFY APK
-      # ============================================================
-
-      - name: Verify APK
+      - name: Find APK
+        if: success()
         run: |
           set -euxo pipefail
 
-          echo "================================"
-          echo "VERIFY APK"
-          echo "================================"
+          echo "=============================="
+          echo "APK FILES"
+          echo "=============================="
+
+          find bin \
+            -type f \
+            -name "*.apk" \
+            -ls
 
           APK_COUNT=$(
             find bin \
@@ -1192,37 +333,20 @@ jobs:
               | wc -l
           )
 
-          echo "APK files found: $APK_COUNT"
-
           if [ "$APK_COUNT" -eq 0 ]; then
-
-            echo "ERROR: APK WAS NOT CREATED"
-
+            echo "ERROR: APK not found"
             exit 1
-
           fi
-
-          find bin \
-            -type f \
-            -name "*.apk" \
-            -ls
-
-          echo "================================"
-          echo "APK BUILD SUCCESS"
-          echo "================================"
 
 
       # ============================================================
-      # 16. RENAME APK
+      # 13. RENAME APK
       # ============================================================
 
       - name: Rename APK
+        if: success()
         run: |
           set -euxo pipefail
-
-          echo "================================"
-          echo "RENAMING APK"
-          echo "================================"
 
           APK_FILE=$(
             find bin \
@@ -1232,38 +356,22 @@ jobs:
               | head -n 1
           )
 
-          if [ -z "$APK_FILE" ]; then
-
-            echo "ERROR: APK FILE NOT FOUND"
-
-            exit 1
-
-          fi
+          test -n "$APK_FILE"
 
           NEW_APK="bin/TEST_OVIK_${{ github.run_number }}.apk"
 
-          mv \
-            "$APK_FILE" \
-            "$NEW_APK"
+          mv "$APK_FILE" "$NEW_APK"
 
-          echo "Original APK:"
-          echo "$APK_FILE"
-
-          echo "New APK:"
-          echo "$NEW_APK"
-
-          test -f "$NEW_APK"
-
-          echo "================================"
-          echo "APK RENAME SUCCESS"
-          echo "================================"
+          echo "APK:"
+          ls -lh "$NEW_APK"
 
 
       # ============================================================
-      # 17. UPLOAD APK
+      # 14. UPLOAD APK
       # ============================================================
 
       - name: Upload APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: TEST_OVIK_${{ github.run_number }}
