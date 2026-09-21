@@ -80,7 +80,7 @@ jobs:
 
 
       # ============================================================
-      # 5. BUILDOZER
+      # 5. INSTALL BUILDOZER
       # ============================================================
 
       - name: Install Buildozer
@@ -211,6 +211,7 @@ jobs:
             "$TEMP_DIR/cmdline-tools" \
             "$SDK_DIR/cmdline-tools/latest"
 
+          # Buildozer 1.5 compatibility
           mkdir -p "$SDK_DIR/tools"
 
           ln -s \
@@ -225,6 +226,7 @@ jobs:
             "$SDK_DIR/cmdline-tools/latest/source.properties" \
             "$SDK_DIR/tools/source.properties"
 
+          # Android licenses
           echo \
             "8933bad161af4178b1185d1a37fbf41ea5269c55" \
             > "$SDK_DIR/licenses/android-sdk-license"
@@ -307,7 +309,7 @@ jobs:
 
 
       # ============================================================
-      # 9. CREATE UUID PATCH SCRIPT
+      # 9. PREPARE UUID PATCH
       # ============================================================
 
       - name: Prepare Python uuid patch
@@ -393,7 +395,7 @@ jobs:
           ls -la
 
           echo "--------------------------------"
-          echo "buildozer.spec"
+          echo "BUILDOZER SPEC"
           echo "--------------------------------"
 
           test -f buildozer.spec
@@ -403,7 +405,7 @@ jobs:
             buildozer.spec || true
 
           echo "--------------------------------"
-          echo "Python files"
+          echo "PYTHON FILES"
           echo "--------------------------------"
 
           find . \
@@ -413,7 +415,7 @@ jobs:
             -print
 
           echo "--------------------------------"
-          echo "KV files"
+          echo "KV FILES"
           echo "--------------------------------"
 
           find . \
@@ -437,7 +439,13 @@ jobs:
           echo "DAT FILES"
           echo "--------------------------------"
 
-          DAT_COUNT=$(find data -maxdepth 1 -type f -name "*.dat" | wc -l)
+          DAT_COUNT=$(
+            find data \
+              -maxdepth 1 \
+              -type f \
+              -name "*.dat" \
+              | wc -l
+          )
 
           echo "DAT files found: $DAT_COUNT"
 
@@ -466,7 +474,7 @@ jobs:
 
 
       # ============================================================
-      # 11. FINAL ANDROID ENVIRONMENT CHECK
+      # 11. FINAL ENVIRONMENT CHECK
       # ============================================================
 
       - name: Final Android environment check
@@ -479,9 +487,6 @@ jobs:
           echo "================================"
           echo "FINAL ANDROID CHECK"
           echo "================================"
-
-          echo "SDK:"
-          echo "$SDK_DIR"
 
           test -d "$SDK_DIR"
           test -x "$SDKMANAGER"
@@ -508,107 +513,106 @@ jobs:
           echo "ENVIRONMENT READY"
           echo "================================"
 
+
       # ============================================================
       # 12. BUILD APK
       #
-      # 1. Запускаем обычную сборку.
+      # ЛОГИКА:
       #
-      # 2. Если возникает старая ошибка -luuid:
-      #    применяем уже проверенный UUID patch
-      #    и запускаем сборку повторно.
+      # 1. Обычная сборка.
       #
-      # 3. Если возникает:
+      # 2. Если сборка успешна -> готово.
+      #
+      # 3. Если ошибка -luuid ->
+      #    исправляем файлы p4a и повторяем сборку.
+      #
+      # 4. Если возникает:
+      #
       #       ValueError: name is too long
-      #    автоматически анализируем содержимое
-      #    .buildozer/android/app и выводим самые длинные
-      #    имена/пути.
       #
-      # Никакие .dat здесь НЕ переименовываются.
+      #    НЕ переименовываем файлы.
+      #    Вместо этого анализируем реальные файлы,
+      #    подготовленные Buildozer в:
+      #
+      #       .buildozer/android/app
+      #
       # ============================================================
 
       - name: Build APK
         run: |
           set -o pipefail
 
+
+          # --------------------------------------------------------
+          # FUNCTION: LONG NAME DIAGNOSTICS
+          # --------------------------------------------------------
+
           diagnose_long_names() {
 
             echo
             echo "================================================"
-            echo "DIAGNOSIS: NAME IS TOO LONG"
+            echo "USTAR NAME LENGTH DIAGNOSIS"
             echo "================================================"
+            echo
 
             python - <<'PY'
           from pathlib import Path
-          import os
 
-          roots = [
-              Path(".buildozer/android/app"),
-          ]
+          root = Path(".buildozer/android/app")
 
-          found_root = False
+          if not root.exists():
 
-          for root in roots:
+              print(
+                  "ERROR: "
+                  ".buildozer/android/app does not exist"
+              )
 
-              if not root.exists():
+              raise SystemExit(0)
+
+
+          records = []
+
+
+          for path in root.rglob("*"):
+
+              try:
+
+                  relative = path.relative_to(root)
+
+              except Exception:
+
                   continue
 
-              found_root = True
 
-              print()
-              print("=" * 70)
-              print("ANALYSING:", root)
-              print("=" * 70)
+              rel_text = relative.as_posix()
 
-              records = []
+              name_text = path.name
 
-              for path in root.rglob("*"):
 
-                  try:
-                      relative = path.relative_to(root)
-                  except Exception:
-                      continue
+              rel_chars = len(rel_text)
 
-                  rel_string = str(relative)
-                  full_string = str(path)
-
-                  name_chars = len(path.name)
-                  name_bytes = len(
-                      path.name.encode("utf-8")
-                  )
-
-                  rel_chars = len(rel_string)
-                  rel_bytes = len(
-                      rel_string.encode("utf-8")
-                  )
-
-                  full_chars = len(full_string)
-                  full_bytes = len(
-                      full_string.encode("utf-8")
-                  )
-
-                  records.append(
-                      (
-                          rel_bytes,
-                          name_bytes,
-                          rel_chars,
-                          name_chars,
-                          full_bytes,
-                          full_chars,
-                          str(path),
-                      )
-                  )
-
-              records.sort(
-                  key=lambda item: item[0],
-                  reverse=True,
+              rel_bytes = len(
+                  rel_text.encode("utf-8")
               )
 
-              print()
-              print("TOP 100 LONGEST RELATIVE PATHS")
-              print()
 
-              for record in records[:100]:
+              name_chars = len(name_text)
 
+              name_bytes = len(
+                  name_text.encode("utf-8")
+              )
+
+
+              full_text = str(path)
+
+              full_chars = len(full_text)
+
+              full_bytes = len(
+                  full_text.encode("utf-8")
+              )
+
+
+              records.append(
                   (
                       rel_bytes,
                       name_bytes,
@@ -616,150 +620,269 @@ jobs:
                       name_chars,
                       full_bytes,
                       full_chars,
-                      path,
-                  ) = record
-
-                  print(
-                      f"REL={rel_bytes:4} bytes | "
-                      f"NAME={name_bytes:4} bytes | "
-                      f"FULL={full_bytes:4} bytes | "
-                      f"{path}"
+                      rel_text,
                   )
-
-              print()
-              print("=" * 70)
-              print("SUSPICIOUS USTAR NAMES")
-              print("=" * 70)
-              print()
-
-              suspicious = []
-
-              for record in records:
-
-                  (
-                      rel_bytes,
-                      name_bytes,
-                      rel_chars,
-                      name_chars,
-                      full_bytes,
-                      full_chars,
-                      path,
-                  ) = record
-
-                  # USTAR name/prefix limitations make long
-                  # path components especially interesting.
-                  if name_bytes > 100 or rel_bytes > 100:
-
-                      suspicious.append(record)
-
-                      print(
-                          f"REL={rel_bytes:4} bytes | "
-                          f"NAME={name_bytes:4} bytes | "
-                          f"{path}"
-                      )
-
-              print()
-              print(
-                  "Suspicious entries:",
-                  len(suspicious)
               )
 
-              print()
-              print("=" * 70)
-              print("LONGEST FILE NAMES ONLY")
-              print("=" * 70)
-              print()
 
-              by_name = sorted(
-                  records,
-                  key=lambda item: item[1],
-                  reverse=True,
-              )
+          records.sort(
+              key=lambda item: item[0],
+              reverse=True,
+          )
 
-              for record in by_name[:50]:
 
-                  (
-                      rel_bytes,
-                      name_bytes,
-                      rel_chars,
-                      name_chars,
-                      full_bytes,
-                      full_chars,
-                      path,
-                  ) = record
-
-                  print(
-                      f"NAME={name_bytes:4} bytes | "
-                      f"REL={rel_bytes:4} bytes | "
-                      f"{path}"
-                  )
-
-          if not found_root:
-
-              print(
-                  "WARNING: "
-                  ".buildozer/android/app was not found."
-              )
-
-          print()
-          print("=" * 70)
-          print("PROJECT DATA FILES")
-          print("=" * 70)
+          print("=" * 78)
+          print("TOP 100 LONGEST RELATIVE PATHS")
+          print("=" * 78)
           print()
 
-          data = Path("data")
 
-          if data.exists():
+          for record in records[:100]:
 
-              files = []
-
-              for path in data.iterdir():
-
-                  if not path.is_file():
-                      continue
-
-                  name_bytes = len(
-                      path.name.encode("utf-8")
-                  )
-
-                  path_bytes = len(
-                      str(path).encode("utf-8")
-                  )
-
-                  files.append(
-                      (
-                          name_bytes,
-                          path_bytes,
-                          str(path),
-                      )
-                  )
-
-              files.sort(reverse=True)
-
-              for (
+              (
+                  rel_bytes,
                   name_bytes,
-                  path_bytes,
-                  path,
-              ) in files:
+                  rel_chars,
+                  name_chars,
+                  full_bytes,
+                  full_chars,
+                  rel_text,
+              ) = record
+
+
+              print(
+                  f"PATH={rel_bytes:4} bytes | "
+                  f"NAME={name_bytes:4} bytes | "
+                  f"PATH_CHARS={rel_chars:4} | "
+                  f"{rel_text}"
+              )
+
+
+          print()
+          print("=" * 78)
+          print("INDIVIDUAL FILE/DIRECTORY NAMES > 100 BYTES")
+          print("=" * 78)
+          print()
+
+
+          long_names = 0
+
+
+          for record in records:
+
+              (
+                  rel_bytes,
+                  name_bytes,
+                  rel_chars,
+                  name_chars,
+                  full_bytes,
+                  full_chars,
+                  rel_text,
+              ) = record
+
+
+              if name_bytes > 100:
+
+                  long_names += 1
 
                   print(
                       f"NAME={name_bytes:4} bytes | "
-                      f"PATH={path_bytes:4} bytes | "
-                      f"{path}"
+                      f"PATH={rel_bytes:4} bytes | "
+                      f"{rel_text}"
                   )
 
-          else:
 
-              print("data directory not found")
+          if long_names == 0:
+
+              print(
+                  "No individual file/directory "
+                  "name exceeds 100 UTF-8 bytes."
+              )
+
+
+          print()
+          print("=" * 78)
+          print("RELATIVE PATHS > 100 BYTES")
+          print("=" * 78)
+          print()
+
+
+          long_paths = 0
+
+
+          for record in records:
+
+              (
+                  rel_bytes,
+                  name_bytes,
+                  rel_chars,
+                  name_chars,
+                  full_bytes,
+                  full_chars,
+                  rel_text,
+              ) = record
+
+
+              if rel_bytes > 100:
+
+                  long_paths += 1
+
+                  print(
+                      f"PATH={rel_bytes:4} bytes | "
+                      f"NAME={name_bytes:4} bytes | "
+                      f"{rel_text}"
+                  )
+
+
+          if long_paths == 0:
+
+              print(
+                  "No relative path exceeds "
+                  "100 UTF-8 bytes."
+              )
+
+
+          print()
+          print("=" * 78)
+          print("LONGEST INDIVIDUAL NAMES")
+          print("=" * 78)
+          print()
+
+
+          by_name = sorted(
+              records,
+              key=lambda item: item[1],
+              reverse=True,
+          )
+
+
+          for record in by_name[:50]:
+
+              (
+                  rel_bytes,
+                  name_bytes,
+                  rel_chars,
+                  name_chars,
+                  full_bytes,
+                  full_chars,
+                  rel_text,
+              ) = record
+
+
+              print(
+                  f"NAME={name_bytes:4} bytes | "
+                  f"PATH={rel_bytes:4} bytes | "
+                  f"{rel_text}"
+              )
+
+
+          print()
+          print("=" * 78)
+          print("SUMMARY")
+          print("=" * 78)
+
+          print(
+              "Entries analysed:",
+              len(records)
+          )
+
+          print(
+              "Names > 100 bytes:",
+              long_names
+          )
+
+          print(
+              "Paths > 100 bytes:",
+              long_paths
+          )
 
           PY
 
+
             echo
             echo "================================================"
-            echo "END OF LONG NAME DIAGNOSIS"
+            echo "PROJECT DATA FILE DIAGNOSIS"
             echo "================================================"
+            echo
+
+
+            python - <<'PY'
+          from pathlib import Path
+
+          data = Path("data")
+
+          if not data.exists():
+
+              print("ERROR: data directory not found")
+
+              raise SystemExit(0)
+
+
+          records = []
+
+
+          for path in data.iterdir():
+
+              if not path.is_file():
+                  continue
+
+
+              name = path.name
+
+              name_chars = len(name)
+
+              name_bytes = len(
+                  name.encode("utf-8")
+              )
+
+
+              records.append(
+                  (
+                      name_bytes,
+                      name_chars,
+                      name,
+                  )
+              )
+
+
+          records.sort(
+              reverse=True
+          )
+
+
+          for (
+              name_bytes,
+              name_chars,
+              name,
+          ) in records:
+
+              print(
+                  f"NAME={name_bytes:4} bytes | "
+                  f"CHARS={name_chars:4} | "
+                  f"{name}"
+              )
+
+
+          print()
+          print(
+              "Total data files:",
+              len(records)
+          )
+
+          PY
+
+
+            echo
+            echo "================================================"
+            echo "END OF USTAR DIAGNOSIS"
+            echo "================================================"
+            echo
           }
 
+
+          # --------------------------------------------------------
+          # FIRST BUILD
+          # --------------------------------------------------------
 
           echo "================================"
           echo "FIRST BUILD ATTEMPT"
@@ -774,18 +897,21 @@ jobs:
 
           set -e
 
+
           echo "================================"
           echo "FIRST BUILD RESULT: $FIRST_RESULT"
           echo "================================"
 
 
           # --------------------------------------------------------
-          # УСПЕШНАЯ ПЕРВАЯ СБОРКА
+          # FIRST BUILD SUCCESS
           # --------------------------------------------------------
 
           if [ "$FIRST_RESULT" -eq 0 ]; then
 
+            echo "================================"
             echo "FIRST BUILD SUCCESSFUL"
+            echo "================================"
 
             cp first-build.log build.log
 
@@ -795,8 +921,7 @@ jobs:
 
 
           # --------------------------------------------------------
-          # НОВАЯ ОШИБКА:
-          # ValueError: name is too long
+          # NAME TOO LONG ON FIRST BUILD
           # --------------------------------------------------------
 
           if grep -q \
@@ -818,20 +943,27 @@ jobs:
 
 
           # --------------------------------------------------------
-          # СТАРАЯ ОШИБКА -luuid
+          # CHECK OLD -luuid ERROR
           # --------------------------------------------------------
 
           echo "================================"
           echo "CHECKING FOR -luuid ERROR"
           echo "================================"
 
+
           if ! grep -q \
             "unable to find library -luuid" \
             first-build.log; then
 
-            echo "ERROR:"
-            echo "First build failed for another reason."
-            echo "No automatic patch will be applied."
+            echo
+            echo "================================"
+            echo "UNKNOWN BUILD ERROR"
+            echo "================================"
+            echo
+
+            echo \
+              "First build failed, but the error is neither" \
+              "'name is too long' nor '-luuid'."
 
             cp first-build.log build.log
 
@@ -840,13 +972,14 @@ jobs:
           fi
 
 
+          echo
           echo "================================"
           echo "-luuid ERROR CONFIRMED"
           echo "================================"
 
 
           # --------------------------------------------------------
-          # ССЫЛКИ НА -luuid ДО PATCH
+          # UUID REFERENCES BEFORE PATCH
           # --------------------------------------------------------
 
           echo "================================"
@@ -860,7 +993,7 @@ jobs:
 
 
           # --------------------------------------------------------
-          # UUID PATCH
+          # PRIMARY UUID PATCH
           # --------------------------------------------------------
 
           echo "================================"
@@ -871,18 +1004,22 @@ jobs:
 
 
           # --------------------------------------------------------
-          # ДОПОЛНИТЕЛЬНАЯ ОЧИСТКА -luuid
+          # SECONDARY UUID CLEANUP
           # --------------------------------------------------------
 
           echo "================================"
           echo "SECONDARY UUID CLEANUP"
           echo "================================"
 
+
           while IFS= read -r -d '' file; do
 
             if grep -Iq . "$file" 2>/dev/null; then
 
-              if grep -q -- "-luuid" "$file" 2>/dev/null; then
+              if grep -q \
+                -- "-luuid" \
+                "$file" \
+                2>/dev/null; then
 
                 echo "Cleaning: $file"
 
@@ -904,7 +1041,7 @@ jobs:
 
 
           # --------------------------------------------------------
-          # ПРОВЕРКА ПОСЛЕ PATCH
+          # UUID REFERENCES AFTER PATCH
           # --------------------------------------------------------
 
           echo "================================"
@@ -918,9 +1055,10 @@ jobs:
 
 
           # --------------------------------------------------------
-          # ВТОРАЯ СБОРКА
+          # SECOND BUILD
           # --------------------------------------------------------
 
+          echo
           echo "================================"
           echo "SECOND BUILD ATTEMPT"
           echo "================================"
@@ -935,8 +1073,13 @@ jobs:
           set -e
 
 
+          echo "================================"
+          echo "SECOND BUILD RESULT: $SECOND_RESULT"
+          echo "================================"
+
+
           # --------------------------------------------------------
-          # ОБЪЕДИНЯЕМ ЛОГИ
+          # CREATE COMPLETE LOG
           # --------------------------------------------------------
 
           {
@@ -958,13 +1101,24 @@ jobs:
           } > build.log
 
 
-          echo "================================"
-          echo "SECOND BUILD RESULT: $SECOND_RESULT"
-          echo "================================"
+          # --------------------------------------------------------
+          # SECOND BUILD SUCCESS
+          # --------------------------------------------------------
+
+          if [ "$SECOND_RESULT" -eq 0 ]; then
+
+            echo
+            echo "================================"
+            echo "SECOND BUILD SUCCESSFUL"
+            echo "================================"
+
+            exit 0
+
+          fi
 
 
           # --------------------------------------------------------
-          # ЕСЛИ ПОСЛЕ UUID PATCH ПОЛУЧИЛИ NAME TOO LONG
+          # NAME TOO LONG AFTER UUID PATCH
           # --------------------------------------------------------
 
           if grep -q \
@@ -983,8 +1137,9 @@ jobs:
 
           exit "$SECOND_RESULT"
 
+
       # ============================================================
-      # 13. UPLOAD BUILD LOG
+      # 13. UPLOAD BUILD LOGS
       # ============================================================
 
       - name: Upload build log
@@ -1030,7 +1185,12 @@ jobs:
           echo "VERIFY APK"
           echo "================================"
 
-          APK_COUNT=$(find bin -type f -name "*.apk" | wc -l)
+          APK_COUNT=$(
+            find bin \
+              -type f \
+              -name "*.apk" \
+              | wc -l
+          )
 
           echo "APK files found: $APK_COUNT"
 
@@ -1064,7 +1224,13 @@ jobs:
           echo "RENAMING APK"
           echo "================================"
 
-          APK_FILE=$(find bin -maxdepth 1 -type f -name "*.apk" | head -n 1)
+          APK_FILE=$(
+            find bin \
+              -maxdepth 1 \
+              -type f \
+              -name "*.apk" \
+              | head -n 1
+          )
 
           if [ -z "$APK_FILE" ]; then
 
