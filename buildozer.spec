@@ -13,7 +13,7 @@ source.include_exts = py,kv,png,jpg,jpeg,json,dat,ttf
 
 icon.filename = %(source.dir)s/assets/icon.png
 
-requirements = python3==3.11.9,kivy
+requirements = python3,kivy
 
 orientation = portrait
 
