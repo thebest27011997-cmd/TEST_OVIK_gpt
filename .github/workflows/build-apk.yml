@@ -115,8 +115,11 @@ jobs:
           mkdir -p bin
 
       - name: Build APK
-        run: |
-          yes | buildozer -v android debug
+  run: |
+    set -o pipefail
+
+    buildozer -v android debug \
+      2>&1 | tee build.log
 
       - name: Search for APK
         if: always()
