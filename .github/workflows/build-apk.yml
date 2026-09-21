@@ -128,12 +128,11 @@ jobs:
       # 7. PREPARE ANDROID SDK BEFORE BUILDOZER
       # ============================================================
 
-      - name: Prepare Android SDK
+            - name: Prepare Android SDK
         run: |
           set -euxo pipefail
 
           SDK_DIR="$HOME/.buildozer/android/platform/android-sdk"
-
           CMDLINE_ZIP="$RUNNER_TEMP/commandlinetools.zip"
           CMDLINE_TMP="$RUNNER_TEMP/android-cmdline-tools"
 
@@ -163,14 +162,47 @@ jobs:
 
           test -x "$SDKMANAGER"
 
+          # --------------------------------------------------------
+          # BUILDOZER 1.5.0 COMPATIBILITY
+          #
+          # Buildozer still searches:
+          # android-sdk/tools/bin/sdkmanager
+          #
+          # Modern Android command line tools use:
+          # android-sdk/cmdline-tools/latest/bin/sdkmanager
+          # --------------------------------------------------------
+
+          mkdir -p "$SDK_DIR/tools"
+
+          ln -sfn \
+            "$SDK_DIR/cmdline-tools/latest/bin" \
+            "$SDK_DIR/tools/bin"
+
+          ln -sfn \
+            "$SDK_DIR/cmdline-tools/latest/lib" \
+            "$SDK_DIR/tools/lib"
+
+          ln -sfn \
+            "$SDK_DIR/cmdline-tools/latest/source.properties" \
+            "$SDK_DIR/tools/source.properties"
+
           echo "================================"
-          echo "SDKMANAGER VERSION"
+          echo "SDKMANAGER CHECK"
           echo "================================"
 
           "$SDKMANAGER" \
             --sdk_root="$SDK_DIR" \
             --version
 
+          "$SDK_DIR/tools/bin/sdkmanager" \
+            --sdk_root="$SDK_DIR" \
+            --version
+
+          test -x "$SDK_DIR/tools/bin/sdkmanager"
+
+          echo "================================"
+          echo "BUILDOZER SDK PATH READY"
+          echo "================================"
 
       # ============================================================
       # 8. ACCEPT ANDROID LICENSES
