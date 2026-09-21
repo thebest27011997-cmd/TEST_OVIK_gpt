@@ -10,14 +10,32 @@ jobs:
   build:
     runs-on: ubuntu-22.04
 
+    env:
+      BUILDOZER_WARN_ON_ROOT: "0"
+
     steps:
+
+      # ============================================================
+      # 1. CHECKOUT
+      # ============================================================
+
       - name: Checkout repository
         uses: actions/checkout@v4
+
+
+      # ============================================================
+      # 2. PYTHON 3.11
+      # ============================================================
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
+
+      # ============================================================
+      # 3. JAVA 17
+      # ============================================================
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
@@ -25,138 +43,464 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+
+      # ============================================================
+      # 4. SYSTEM DEPENDENCIES
+      # ============================================================
+
       - name: Install system dependencies
         run: |
+          set -euxo pipefail
+
           sudo apt-get update
+
           sudo apt-get install -y \
             git \
             zip \
             unzip \
-            openjdk-17-jdk \
-            python3-pip \
+            wget \
+            curl \
             autoconf \
             automake \
             libtool \
+            libtool-bin \
             pkg-config \
+            build-essential \
+            cmake \
+            ninja-build \
+            gettext \
+            autopoint \
+            libffi-dev \
+            libssl-dev \
             zlib1g-dev \
             libncurses5-dev \
             libncursesw5-dev \
-            libtinfo6 \
-            cmake \
-            libffi-dev \
-            libssl-dev
+            python3-dev \
+            ccache
 
-      - name: Install Buildozer and dependencies
+
+      # ============================================================
+      # 5. INSTALL BUILDOZER
+      # ============================================================
+
+      - name: Install Buildozer
         run: |
+          set -euxo pipefail
+
           python -m pip install --upgrade pip
+
           python -m pip install \
             buildozer \
-            cython==0.29.36 \
+            "Cython==0.29.36" \
             setuptools \
             wheel
 
-      # Buildozer при первом запуске создаёт Android SDK.
-      # Первый запуск может завершиться ошибкой из-за непринятых лицензий.
-      # Поэтому разрешаем ему подготовить SDK, после чего принимаем лицензии.
-      - name: Initialize Buildozer Android SDK
-        continue-on-error: true
+          echo "================================"
+          echo "VERSIONS"
+          echo "================================"
+
+          python --version
+          java -version
+          buildozer --version
+          cython --version
+
+
+      # ============================================================
+      # 6. VERIFY BUILDOZER SPEC
+      # ============================================================
+
+      - name: Verify buildozer.spec
         run: |
-          yes | buildozer android debug || true
+          set -euxo pipefail
+
+          test -f buildozer.spec
+
+          echo "================================"
+          echo "BUILDOZER SPEC"
+          echo "================================"
+
+          grep -E \
+            "^(title|package.name|package.domain|version|requirements|android.api|android.minapi|android.archs|p4a.branch)" \
+            buildozer.spec || true
+
+
+      # ============================================================
+      # 7. PREPARE ANDROID SDK BEFORE BUILDOZER
+      # ============================================================
+
+      - name: Prepare Android SDK
+        run: |
+          set -euxo pipefail
+
+          SDK_DIR="$HOME/.buildozer/android/platform/android-sdk"
+
+          CMDLINE_ZIP="$RUNNER_TEMP/commandlinetools.zip"
+          CMDLINE_TMP="$RUNNER_TEMP/android-cmdline-tools"
+
+          echo "================================"
+          echo "PREPARING ANDROID SDK"
+          echo "================================"
+
+          rm -rf "$SDK_DIR"
+          rm -rf "$CMDLINE_TMP"
+
+          mkdir -p "$SDK_DIR/cmdline-tools"
+          mkdir -p "$CMDLINE_TMP"
+
+          wget -q \
+            https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip \
+            -O "$CMDLINE_ZIP"
+
+          unzip -q \
+            "$CMDLINE_ZIP" \
+            -d "$CMDLINE_TMP"
+
+          mv \
+            "$CMDLINE_TMP/cmdline-tools" \
+            "$SDK_DIR/cmdline-tools/latest"
+
+          SDKMANAGER="$SDK_DIR/cmdline-tools/latest/bin/sdkmanager"
+
+          test -x "$SDKMANAGER"
+
+          echo "================================"
+          echo "SDKMANAGER VERSION"
+          echo "================================"
+
+          "$SDKMANAGER" \
+            --sdk_root="$SDK_DIR" \
+            --version
+
+
+      # ============================================================
+      # 8. ACCEPT ANDROID LICENSES
+      # ============================================================
 
       - name: Accept Android SDK licenses
         run: |
+          set -euxo pipefail
+
           SDK_DIR="$HOME/.buildozer/android/platform/android-sdk"
 
-          echo "Android SDK directory:"
-          echo "$SDK_DIR"
+          SDKMANAGER="$SDK_DIR/cmdline-tools/latest/bin/sdkmanager"
 
-          if [ -x "$SDK_DIR/tools/bin/sdkmanager" ]; then
-            yes | "$SDK_DIR/tools/bin/sdkmanager" \
-              --sdk_root="$SDK_DIR" \
-              --licenses || true
+          echo "================================"
+          echo "ACCEPTING ANDROID LICENSES"
+          echo "================================"
 
-            yes | "$SDK_DIR/tools/bin/sdkmanager" \
-              --sdk_root="$SDK_DIR" \
-              "platform-tools" || true
+          yes | \
+            "$SDKMANAGER" \
+            --sdk_root="$SDK_DIR" \
+            --licenses \
+            >/dev/null || true
 
-            yes | "$SDK_DIR/tools/bin/sdkmanager" \
-              --sdk_root="$SDK_DIR" \
-              "build-tools;35.0.0" || true
-          fi
+          echo "Android SDK licenses processed."
 
-          if [ -x "$SDK_DIR/cmdline-tools/latest/bin/sdkmanager" ]; then
-            yes | "$SDK_DIR/cmdline-tools/latest/bin/sdkmanager" \
-              --sdk_root="$SDK_DIR" \
-              --licenses || true
 
-            yes | "$SDK_DIR/cmdline-tools/latest/bin/sdkmanager" \
-              --sdk_root="$SDK_DIR" \
-              "platform-tools" \
-              "build-tools;35.0.0" || true
-          fi
+      # ============================================================
+      # 9. INSTALL REQUIRED ANDROID COMPONENTS
+      #
+      # Install both 35 and 37 build-tools.
+      # API target remains 35 in buildozer.spec.
+      # ============================================================
+
+      - name: Install Android SDK components
+        run: |
+          set -euxo pipefail
+
+          SDK_DIR="$HOME/.buildozer/android/platform/android-sdk"
+
+          SDKMANAGER="$SDK_DIR/cmdline-tools/latest/bin/sdkmanager"
+
+          echo "================================"
+          echo "INSTALLING ANDROID COMPONENTS"
+          echo "================================"
+
+          "$SDKMANAGER" \
+            --sdk_root="$SDK_DIR" \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0" \
+            "build-tools;37.0.0"
+
+          echo "================================"
+          echo "INSTALLED PACKAGES"
+          echo "================================"
+
+          "$SDKMANAGER" \
+            --sdk_root="$SDK_DIR" \
+            --list_installed
+
+
+      # ============================================================
+      # 10. VERIFY SDK / AIDL
+      # ============================================================
 
       - name: Verify Android SDK
         run: |
+          set -euxo pipefail
+
           SDK_DIR="$HOME/.buildozer/android/platform/android-sdk"
 
-          echo "=== SDK folders ==="
-          ls -la "$SDK_DIR" || true
+          echo "================================"
+          echo "ANDROID SDK"
+          echo "================================"
 
-          echo "=== Build tools ==="
-          ls -la "$SDK_DIR/build-tools" || true
+          ls -la "$SDK_DIR"
 
-          echo "=== AIDL ==="
-          find "$SDK_DIR" -type f -name aidl -print || true
+          echo "================================"
+          echo "BUILD TOOLS"
+          echo "================================"
+
+          ls -la "$SDK_DIR/build-tools"
+
+          echo "================================"
+          echo "AIDL"
+          echo "================================"
+
+          find \
+            "$SDK_DIR/build-tools" \
+            -type f \
+            -name aidl \
+            -print
+
+          test -f \
+            "$SDK_DIR/platforms/android-35/android.jar"
+
+          test -x \
+            "$SDK_DIR/platform-tools/adb"
+
+          if [ ! -x "$SDK_DIR/build-tools/35.0.0/aidl" ] && \
+             [ ! -x "$SDK_DIR/build-tools/37.0.0/aidl" ]; then
+
+            echo "ERROR: AIDL NOT FOUND"
+
+            exit 1
+
+          fi
+
+          echo "================================"
+          echo "ANDROID SDK READY"
+          echo "================================"
+
+
+      # ============================================================
+      # 11. VERIFY APPLICATION FILES
+      # ============================================================
+
+      - name: Verify application files
+        run: |
+          set -euxo pipefail
+
+          echo "================================"
+          echo "APPLICATION FILES"
+          echo "================================"
+
+          test -f main.py
+          test -f testov.kv
+          test -f buildozer.spec
+          test -d data
+
+          echo "--------------------------------"
+          echo "DAT FILES"
+          echo "--------------------------------"
+
+          DAT_COUNT=$(
+            find data \
+              -maxdepth 1 \
+              -type f \
+              -name "*.dat" \
+              | wc -l
+          )
+
+          echo "DAT files found: $DAT_COUNT"
+
+          find data \
+            -maxdepth 1 \
+            -type f \
+            -name "*.dat" \
+            -print
+
+          if [ "$DAT_COUNT" -eq 0 ]; then
+
+            echo "ERROR: NO DAT FILES FOUND"
+
+            exit 1
+
+          fi
+
+          echo "================================"
+          echo "APPLICATION FILES OK"
+          echo "================================"
+
+
+      # ============================================================
+      # 12. CLEAN OLD APPLICATION BUILD
+      #
+      # IMPORTANT:
+      # Do NOT delete $HOME/.buildozer here.
+      # Android SDK is stored there.
+      # ============================================================
 
       - name: Clean previous application build
         run: |
-          rm -rf .buildozer/android/platform/build-*
+          set -euxo pipefail
+
+          echo "================================"
+          echo "CLEAN PROJECT BUILD"
+          echo "================================"
+
+          rm -rf .buildozer
           rm -rf bin
+
           mkdir -p bin
 
+          echo "Project build cache removed."
+
+
+      # ============================================================
+      # 13. BUILD APK
+      #
+      # IMPORTANT:
+      # There is intentionally NO:
+      #
+      # yes | buildozer ...
+      #
+      # Android licenses have already been accepted.
+      # ============================================================
+
       - name: Build APK
-  run: |
-    set -o pipefail
-
-    buildozer -v android debug \
-      2>&1 | tee build.log
-
-      - name: Search for APK
-        if: always()
         run: |
-          echo "=== APK files ==="
-          find . -type f -name "*.apk" -print || true
+          set -o pipefail
 
-      - name: Verify APK
+          echo "================================"
+          echo "BUILD APK"
+          echo "================================"
+
+          buildozer -v android debug 2>&1 | tee build.log
+
+
+      # ============================================================
+      # 14. SHOW ERROR CONTEXT
+      # ============================================================
+
+      - name: Show build diagnostics
+        if: failure()
         run: |
-          APK=$(find bin -type f -name "*.apk" | head -n 1)
+          echo "================================"
+          echo "LAST 400 BUILD LOG LINES"
+          echo "================================"
 
-          if [ -z "$APK" ]; then
-            echo "ERROR: APK not found"
-            exit 1
-          fi
+          tail -400 build.log || true
 
-          echo "APK found:"
-          echo "$APK"
-          ls -lh "$APK"
+          echo
+          echo "================================"
+          echo "ERROR LINES"
+          echo "================================"
 
-      - name: Rename APK
-        run: |
-          APK=$(find bin -type f -name "*.apk" | head -n 1)
-          cp "$APK" bin/TechProfi-debug.apk
+          grep -i -n \
+            -E "error:|exception|traceback|failed|failure|not found|no such file|valueerror" \
+            build.log \
+            | tail -150 || true
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: TechProfi-APK
-          path: bin/TechProfi-debug.apk
-          if-no-files-found: error
+
+      # ============================================================
+      # 15. UPLOAD BUILD LOG
+      # ============================================================
 
       - name: Upload build log
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: build-log
-          path: |
-            .buildozer/**/*.log
+          name: build-log-${{ github.run_number }}
+          path: build.log
           if-no-files-found: ignore
+          retention-days: 7
+
+
+      # ============================================================
+      # 16. SEARCH FOR APK
+      # ============================================================
+
+      - name: Search for APK
+        if: success()
+        run: |
+          set -euxo pipefail
+
+          echo "================================"
+          echo "APK FILES"
+          echo "================================"
+
+          find bin \
+            -type f \
+            -name "*.apk" \
+            -ls
+
+          APK_COUNT=$(
+            find bin \
+              -type f \
+              -name "*.apk" \
+              | wc -l
+          )
+
+          echo "APK files found: $APK_COUNT"
+
+          if [ "$APK_COUNT" -eq 0 ]; then
+
+            echo "ERROR: APK NOT FOUND"
+
+            exit 1
+
+          fi
+
+
+      # ============================================================
+      # 17. RENAME APK
+      # ============================================================
+
+      - name: Rename APK
+        if: success()
+        run: |
+          set -euxo pipefail
+
+          APK_FILE=$(
+            find bin \
+              -maxdepth 1 \
+              -type f \
+              -name "*.apk" \
+              | head -n 1
+          )
+
+          if [ -z "$APK_FILE" ]; then
+
+            echo "ERROR: APK FILE NOT FOUND"
+
+            exit 1
+
+          fi
+
+          NEW_APK="bin/TechProfi_${{ github.run_number }}.apk"
+
+          if [ "$APK_FILE" != "$NEW_APK" ]; then
+            mv "$APK_FILE" "$NEW_APK"
+          fi
+
+          echo "================================"
+          echo "FINAL APK"
+          echo "================================"
+
+          ls -lh "$NEW_APK"
+
+
+      # ============================================================
+      # 18. UPLOAD APK
+      # ============================================================
+
+      - name: Upload APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: TechProfi-${{ github.run_number }}
+          path: bin/TechProfi_${{ github.run_number }}.apk
+          if-no-files-found: error
+          retention-days: 14
