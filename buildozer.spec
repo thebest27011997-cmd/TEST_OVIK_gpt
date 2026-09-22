@@ -6,7 +6,7 @@ package.name = testov
 package.domain = ru.testov
 
 source.dir = .
-source.include_exts = py,kv,png,json,ttf,data
+source.include_exts = py,kv,png,json,ttf,dat
 
 version = 0.2.0
 
