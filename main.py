@@ -44,6 +44,60 @@ DEFAULT_PASS_PERCENT = 80
 
 
 # =========================================================
+# ПОЛНЫЕ НАЗВАНИЯ НОРМАТИВНЫХ ДОКУМЕНТОВ
+# =========================================================
+#
+# ВАЖНО:
+# source_id остаются короткими и стабильными.
+# .dat-файлы также остаются с короткими именами.
+# Полные названия используются только для отображения
+# пользователю в настройках и в блоке "Источник".
+#
+SOURCE_DISPLAY_NAMES = {
+    "СП 50.13330.2024":
+        "СП 50.13330.2024 — Тепловая защита зданий",
+
+    "СП 510.1325800.2022":
+        "СП 510.1325800.2022 — Тепловые пункты и системы "
+        "внутреннего теплоснабжения",
+
+    "СП 73.13330.2016":
+        "СП 73.13330.2016 — Внутренние санитарно-технические "
+        "системы зданий",
+
+    "СП 60.13330.2020":
+        "СП 60.13330.2020 — Отопление, вентиляция и "
+        "кондиционирование воздуха",
+
+    "СП 246.1325800.2023":
+        "СП 246.1325800.2023 — Положение об авторском надзоре "
+        "при строительстве, реконструкции и капитальном ремонте "
+        "объектов капитального строительства",
+
+    "СП 124.13330.2012":
+        "СП 124.13330.2012 — Тепловые сети",
+
+    "СП 7.13130.2013":
+        "СП 7.13130.2013 — Отопление, вентиляция и "
+        "кондиционирование. Требования пожарной безопасности",
+
+    "Федеральный закон 384":
+        "Федеральный закон от 30.12.2009 № 384-ФЗ — "
+        "Технический регламент о безопасности зданий и сооружений",
+
+    "Постановление Правительства 87":
+        "Постановление Правительства РФ от 16.02.2008 № 87 — "
+        "О составе разделов проектной документации и требованиях "
+        "к их содержанию",
+}
+
+
+def get_source_display_name(source_id):
+    source_id = str(source_id or "").strip()
+    return SOURCE_DISPLAY_NAMES.get(source_id, source_id)
+
+
+# =========================================================
 # ШРИФТЫ
 # =========================================================
 
@@ -70,16 +124,51 @@ def extract_source_code(text):
     if not text:
         return ""
 
-    match = re.search(r"\bСП\s+\d+(?:\.\d+)+", text, flags=re.IGNORECASE)
+    match = re.search(
+        r"\bСП\s+\d+(?:\.\d+)+",
+        text,
+        flags=re.IGNORECASE,
+    )
     if match:
         return match.group(0).strip()
 
-    match = re.search(r"Федеральный\s+закон\s+№?\s*\d+", text, flags=re.IGNORECASE)
+    # Полное название федерального закона:
+    # "Федеральный закон от 30.12.2009 № 384-ФЗ ..."
+    match = re.search(
+        r"Федеральный\s+закон.*?(?:№|N)\s*(\d+)",
+        text,
+        flags=re.IGNORECASE,
+    )
     if match:
-        return match.group(0).strip()
+        return f"Федеральный закон {match.group(1)}"
 
-    if text.casefold().startswith("постановление правительства"):
-        return text
+    # Короткий вариант: "Федеральный закон 384"
+    match = re.search(
+        r"Федеральный\s+закон\s+(\d+)",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if match:
+        return f"Федеральный закон {match.group(1)}"
+
+    # Полное название постановления:
+    # "Постановление Правительства РФ от ... № 87 ..."
+    match = re.search(
+        r"Постановление\s+Правительства.*?(?:№|N)\s*(\d+)",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if match:
+        return f"Постановление Правительства {match.group(1)}"
+
+    # Короткий вариант: "Постановление Правительства 87"
+    match = re.search(
+        r"Постановление\s+Правительства\s+(\d+)",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if match:
+        return f"Постановление Правительства {match.group(1)}"
 
     return text
 
@@ -101,7 +190,7 @@ def discover_dat_sources():
         source_id = extract_source_code(display_name)
         result.append({
             "id": source_id,
-            "name": display_name,
+            "name": get_source_display_name(source_id),
             "filename": path.name,
         })
 
@@ -465,14 +554,51 @@ class Test(Screen):
         question = app.questions[self.idx]
         source = question.get("source", "")
 
+        source_id = get_question_source_id(
+            question,
+            app.bank_name,
+        )
+        full_document_name = get_source_display_name(source_id)
+
         if isinstance(source, dict):
-            document = clean_source_name(source.get("document", ""))
             section = str(source.get("section", "")).strip()
             text = str(source.get("text", "")).strip()
-            parts = [part for part in (document, section, text) if part]
+
+            parts = [
+                part
+                for part in (
+                    full_document_name,
+                    section,
+                    text,
+                )
+                if part
+            ]
+
             self.source = "\n\n".join(parts)
+            return
+
+        source_text = clean_source_name(source)
+
+        if source_text:
+            # Если исходная строка уже содержит обозначение документа,
+            # заменяем только его на полное отображаемое название.
+            if source_id and source_id in source_text:
+                source_text = source_text.replace(
+                    source_id,
+                    full_document_name,
+                    1,
+                )
+                self.source = source_text
+            elif full_document_name:
+                self.source = (
+                    full_document_name
+                    + "\n\n"
+                    + source_text
+                )
+            else:
+                self.source = source_text
         else:
-            self.source = clean_source_name(source)
+            self.source = full_document_name
 
     def render(self):
         app = App.get_running_app()
@@ -816,7 +942,7 @@ class AdminSettings(Screen):
                 size_hint_y=None,
                 height=dp(78),
                 spacing=dp(8),
-                padding=(dp(8), dp(6)),
+                padding=(dp(8), dp(8)),
             )
 
             checkbox = CheckBox(
@@ -835,9 +961,17 @@ class AdminSettings(Screen):
                 color=(.08, .07, .06, 1),
                 halign="left",
                 valign="middle",
+                size_hint_y=None,
+                height=dp(54),
             )
 
-            label.bind(size=self._update_source_label)
+            label.bind(
+                width=self._update_source_label,
+            )
+            label.bind(
+                texture_size=lambda lbl, size, r=row:
+                self._resize_source_row(lbl, size, r)
+            )
             checkbox.bind(
                 active=lambda cb, value, sid=source_id: self.on_source_checkbox(sid, value)
             )
@@ -848,8 +982,12 @@ class AdminSettings(Screen):
 
         self.update_select_all_checkbox()
 
-    def _update_source_label(self, label, size):
-        label.text_size = (size[0], None)
+    def _update_source_label(self, label, width):
+        label.text_size = (width, None)
+
+    def _resize_source_row(self, label, texture_size, row):
+        label.height = max(dp(54), texture_size[1] + dp(12))
+        row.height = max(dp(78), label.height + dp(16))
 
     def on_source_checkbox(self, source_id, active):
         app = App.get_running_app()
@@ -1004,7 +1142,7 @@ class TechProfiApp(App):
             if source_id not in catalog_by_id:
                 catalog_by_id[source_id] = {
                     "id": source_id,
-                    "name": source_id,
+                    "name": get_source_display_name(source_id),
                     "filename": "",
                 }
 
