@@ -1,4 +1,4 @@
-name: Build APK
+name: Build Android APK
 
 on:
   workflow_dispatch:
@@ -14,7 +14,6 @@ jobs:
       BUILDOZER_WARN_ON_ROOT: "0"
 
     steps:
-
       # ============================================================
       # 1. CHECKOUT
       # ============================================================
@@ -32,13 +31,12 @@ jobs:
         with:
           python-version: "3.11"
 
-
       # ============================================================
       # 3. JAVA
       # ============================================================
 
       - name: Set up Java 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
@@ -50,8 +48,6 @@ jobs:
 
       - name: Install system dependencies
         run: |
-          set -euxo pipefail
-
           sudo apt-get update
 
           sudo apt-get install -y \
@@ -85,15 +81,13 @@ jobs:
 
       - name: Install Buildozer
         run: |
-          set -euxo pipefail
-
           python -m pip install --upgrade pip
 
           python -m pip install \
-            "buildozer==1.5.0" \
+            "setuptools<81" \
+            wheel \
             "Cython==0.29.36" \
-            setuptools \
-            wheel
+            "buildozer==1.5.0"
 
           echo "================================"
           echo "VERSIONS"
@@ -106,29 +100,82 @@ jobs:
 
 
       # ============================================================
-      # 6. VERIFY BUILDOZER SPEC
+      # 6. CONFIGURE PYTHON-FOR-ANDROID
       # ============================================================
 
-      - name: Verify buildozer.spec
+      - name: Configure python-for-android
         run: |
-          set -euxo pipefail
+          python - <<'PY'
+          from pathlib import Path
 
-          test -f buildozer.spec
+          path = Path("buildozer.spec")
+
+          text = path.read_text(
+              encoding="utf-8"
+          )
+
+          new_lines = []
+
+          for line in text.splitlines():
+
+              stripped = line.strip()
+
+              if stripped.startswith(
+                  "p4a.branch"
+              ):
+                  continue
+
+              if stripped.startswith(
+                  "android.sdk_path"
+              ):
+                  continue
+
+              if stripped.startswith(
+                  "android.ndk_path"
+              ):
+                  continue
+
+              new_lines.append(line)
+
+          text = "\n".join(
+              new_lines
+          ) + "\n"
+
+          marker = "[buildozer]"
+
+          if marker not in text:
+              raise RuntimeError(
+                  "Section [buildozer] "
+                  "not found in buildozer.spec"
+              )
+
+          text = text.replace(
+              marker,
+              "\n"
+              "# Fixed python-for-android version\n"
+              "p4a.branch = v2024.01.21\n"
+              "\n"
+              + marker,
+              1,
+          )
+
+          path.write_text(
+              text,
+              encoding="utf-8"
+          )
+
+          print(
+              "buildozer.spec updated"
+          )
+          PY
 
           echo "================================"
-          echo "BUILDOZER SPEC"
+          echo "P4A CONFIGURATION"
           echo "================================"
 
-          cat buildozer.spec
-
-          echo
-          echo "================================"
-          echo "IMPORTANT PARAMETERS"
-          echo "================================"
-
-          grep -E \
-            "^(title|package.name|package.domain|version|requirements|android.api|android.minapi|android.archs|p4a.branch)" \
-            buildozer.spec || true
+          grep -n \
+            "p4a.branch" \
+            buildozer.spec
 
 
       # ============================================================
@@ -140,324 +187,279 @@ jobs:
           set -euxo pipefail
 
           SDK_DIR="$HOME/.buildozer/android/platform/android-sdk"
-          CMDLINE_ZIP="$RUNNER_TEMP/commandlinetools.zip"
-          CMDLINE_TMP="$RUNNER_TEMP/android-cmdline-tools"
+
+          ZIP_FILE="$RUNNER_TEMP/android-command-line-tools.zip"
+
+          TEMP_DIR="$RUNNER_TEMP/android-command-line-tools"
+
+          SDKMANAGER="$SDK_DIR/cmdline-tools/latest/bin/sdkmanager"
 
           echo "================================"
           echo "PREPARING ANDROID SDK"
           echo "================================"
 
           rm -rf "$SDK_DIR"
-          rm -rf "$CMDLINE_TMP"
+          rm -rf "$TEMP_DIR"
 
-          mkdir -p "$SDK_DIR/cmdline-tools"
-          mkdir -p "$CMDLINE_TMP"
+          mkdir -p \
+            "$SDK_DIR/cmdline-tools"
+
+          mkdir -p \
+            "$SDK_DIR/licenses"
+
+          mkdir -p \
+            "$TEMP_DIR"
+
+
+          # --------------------------------------------------------
+          # Download Android Command Line Tools
+          # --------------------------------------------------------
 
           wget -q \
             https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip \
-            -O "$CMDLINE_ZIP"
+            -O "$ZIP_FILE"
+
+
+          # --------------------------------------------------------
+          # Extract
+          # --------------------------------------------------------
 
           unzip -q \
-            "$CMDLINE_ZIP" \
-            -d "$CMDLINE_TMP"
+            "$ZIP_FILE" \
+            -d "$TEMP_DIR"
+
+
+          # --------------------------------------------------------
+          # Correct modern SDK layout
+          #
+          # android-sdk/
+          #   cmdline-tools/
+          #     latest/
+          #       bin/
+          #       lib/
+          #       source.properties
+          # --------------------------------------------------------
 
           mv \
-            "$CMDLINE_TMP/cmdline-tools" \
+            "$TEMP_DIR/cmdline-tools" \
             "$SDK_DIR/cmdline-tools/latest"
 
-          SDKMANAGER="$SDK_DIR/cmdline-tools/latest/bin/sdkmanager"
 
-          test -x "$SDKMANAGER"
-
-          echo "================================"
-          echo "CREATE BUILDOZER COMPATIBILITY"
-          echo "================================"
-
-          # Buildozer 1.5.0 ищет sdkmanager здесь:
+          # --------------------------------------------------------
+          # Buildozer 1.5 compatibility layout
           #
+          # Buildozer may expect:
           # android-sdk/tools/bin/sdkmanager
-          #
-          # Современный Android SDK располагает его здесь:
-          #
-          # android-sdk/cmdline-tools/latest/bin/sdkmanager
-          #
-          # Поэтому создаём совместимые ссылки.
+          # --------------------------------------------------------
 
-          mkdir -p "$SDK_DIR/tools"
+          mkdir -p \
+            "$SDK_DIR/tools"
 
-          ln -sfn \
+          ln -s \
             "$SDK_DIR/cmdline-tools/latest/bin" \
             "$SDK_DIR/tools/bin"
 
-          ln -sfn \
+          ln -s \
             "$SDK_DIR/cmdline-tools/latest/lib" \
             "$SDK_DIR/tools/lib"
 
-          ln -sfn \
+          ln -s \
             "$SDK_DIR/cmdline-tools/latest/source.properties" \
             "$SDK_DIR/tools/source.properties"
 
+
+          # --------------------------------------------------------
+          # Android licenses
+          # --------------------------------------------------------
+
+          echo \
+            "8933bad161af4178b1185d1a37fbf41ea5269c55" \
+            > "$SDK_DIR/licenses/android-sdk-license"
+
+          echo \
+            "d56f5187479451eabf01fb78af6dfcb131a6481e" \
+            >> "$SDK_DIR/licenses/android-sdk-license"
+
+          echo \
+            "24333f8a63b6825ea9c5514f83c2829b004d1fee" \
+            > "$SDK_DIR/licenses/android-sdk-preview-license"
+
+
+          # --------------------------------------------------------
+          # Verify sdkmanager
+          #
+          # IMPORTANT:
+          # Call the REAL modern sdkmanager and explicitly provide
+          # --sdk_root.
+          # --------------------------------------------------------
+
           echo "================================"
-          echo "MODERN SDKMANAGER"
+          echo "SDKMANAGER CHECK"
           echo "================================"
+
+          test -x "$SDKMANAGER"
+
+          test -x \
+            "$SDK_DIR/tools/bin/sdkmanager"
 
           "$SDKMANAGER" \
             --sdk_root="$SDK_DIR" \
             --version
 
-          echo "================================"
-          echo "BUILDOZER SDKMANAGER"
-          echo "================================"
 
-          "$SDK_DIR/tools/bin/sdkmanager" \
-            --sdk_root="$SDK_DIR" \
-            --version
+          # --------------------------------------------------------
+          # Accept licenses
+          # --------------------------------------------------------
 
-          test -x "$SDK_DIR/tools/bin/sdkmanager"
-
-          echo "================================"
-          echo "ANDROID SDK STRUCTURE"
-          echo "================================"
-
-          find "$SDK_DIR" \
-            -maxdepth 4 \
-            -type f \
-            -name sdkmanager \
-            -print
-
-          echo "================================"
-          echo "SDK PREPARATION COMPLETE"
-          echo "================================"
-
-
-      # ============================================================
-      # 8. ACCEPT LICENSES
-      # ============================================================
-
-      - name: Accept Android SDK licenses
-        run: |
-          set -euxo pipefail
-
-          SDK_DIR="$HOME/.buildozer/android/platform/android-sdk"
-          SDKMANAGER="$SDK_DIR/cmdline-tools/latest/bin/sdkmanager"
-
-          echo "================================"
-          echo "ACCEPT ANDROID LICENSES"
-          echo "================================"
-
-          set +o pipefail
           yes | \
             "$SDKMANAGER" \
             --sdk_root="$SDK_DIR" \
             --licenses \
-            >/dev/null
-          LICENSE_STATUS=$?
-          set -o pipefail
-
-          # yes can receive SIGPIPE after sdkmanager closes stdin.
-          # The important check is whether licenses/components work below.
-          echo "License command status: $LICENSE_STATUS"
-
-          echo "================================"
-          echo "LICENSE STEP COMPLETE"
-          echo "================================"
+            >/dev/null || true
 
 
-      # ============================================================
-      # 9. INSTALL ANDROID COMPONENTS
-      # ============================================================
-
-      - name: Install Android SDK components
-        run: |
-          set -euxo pipefail
-
-          SDK_DIR="$HOME/.buildozer/android/platform/android-sdk"
-          SDKMANAGER="$SDK_DIR/cmdline-tools/latest/bin/sdkmanager"
-
-          echo "================================"
-          echo "INSTALL ANDROID COMPONENTS"
-          echo "================================"
+          # --------------------------------------------------------
+          # Install Android packages
+          # --------------------------------------------------------
 
           "$SDKMANAGER" \
             --sdk_root="$SDK_DIR" \
             "platform-tools" \
             "platforms;android-35" \
-            "build-tools;35.0.0" \
-            "build-tools;37.0.0"
+            "build-tools;35.0.0"
 
-          echo
+
+          # --------------------------------------------------------
+          # Verify packages
+          # --------------------------------------------------------
+
           echo "================================"
-          echo "INSTALLED SDK PACKAGES"
+          echo "VERIFY ANDROID PACKAGES"
           echo "================================"
 
-          "$SDKMANAGER" \
-            --sdk_root="$SDK_DIR" \
-            --list_installed
+          test -f \
+            "$SDK_DIR/platforms/android-35/android.jar"
+
+          test -x \
+            "$SDK_DIR/build-tools/35.0.0/aidl"
+
+          test -x \
+            "$SDK_DIR/platform-tools/adb"
+
+          test -d \
+            "$SDK_DIR/licenses"
+
+          echo "ANDROID SDK CHECK PASSED"
 
 
       # ============================================================
-      # 10. VERIFY ANDROID SDK
+      # 8. CLEAN OLD PROJECT BUILD
       # ============================================================
 
-      - name: Verify Android SDK
+      - name: Clean previous project build
+        run: |
+          echo "================================"
+          echo "CLEANING PROJECT BUILD"
+          echo "================================"
+
+          rm -rf .buildozer/android/app
+          rm -rf .buildozer/android/platform/build-*
+          rm -rf bin
+
+          mkdir -p bin
+
+
+      # ============================================================
+      # 9. VERIFY APPLICATION FILES
+      # ============================================================
+
+      - name: Verify application files
+        run: |
+          echo "================================"
+          echo "PROJECT FILES"
+          echo "================================"
+
+          pwd
+
+          ls -la
+
+          echo "--------------------------------"
+          echo "buildozer.spec"
+          echo "--------------------------------"
+
+          test -f buildozer.spec
+
+          grep -E \
+            "^(title|package.name|package.domain|source.dir|requirements|android.api|android.minapi|android.archs|p4a.branch)" \
+            buildozer.spec || true
+
+          echo "--------------------------------"
+          echo "Python files"
+          echo "--------------------------------"
+
+          find . \
+            -maxdepth 2 \
+            -type f \
+            -name "*.py" \
+            -print
+
+
+      # ============================================================
+      # 10. FINAL ANDROID ENVIRONMENT CHECK
+      # ============================================================
+
+      - name: Final Android environment check
         run: |
           set -euxo pipefail
 
           SDK_DIR="$HOME/.buildozer/android/platform/android-sdk"
 
+          SDKMANAGER="$SDK_DIR/cmdline-tools/latest/bin/sdkmanager"
+
           echo "================================"
-          echo "BUILD TOOLS"
+          echo "FINAL ANDROID CHECK"
           echo "================================"
 
-          ls -la "$SDK_DIR/build-tools"
+          echo "SDK:"
+          echo "$SDK_DIR"
 
-          echo
-          echo "================================"
-          echo "PLATFORMS"
-          echo "================================"
+          echo "--------------------------------"
 
-          ls -la "$SDK_DIR/platforms"
+          test -d "$SDK_DIR"
 
-          echo
-          echo "================================"
-          echo "AIDL"
-          echo "================================"
-
-          find \
-            "$SDK_DIR/build-tools" \
-            -type f \
-            -name aidl \
-            -print
-
-          echo
-          echo "================================"
-          echo "ADB"
-          echo "================================"
-
-          ls -la \
-            "$SDK_DIR/platform-tools/adb"
-
-          echo
-          echo "================================"
-          echo "SDKMANAGER"
-          echo "================================"
-
-          ls -la \
-            "$SDK_DIR/tools/bin/sdkmanager"
+          test -x "$SDKMANAGER"
 
           test -x \
             "$SDK_DIR/tools/bin/sdkmanager"
-
-          test -x \
-            "$SDK_DIR/platform-tools/adb"
 
           test -f \
             "$SDK_DIR/platforms/android-35/android.jar"
 
-          if [ ! -x "$SDK_DIR/build-tools/35.0.0/aidl" ] && \
-             [ ! -x "$SDK_DIR/build-tools/37.0.0/aidl" ]; then
+          test -x \
+            "$SDK_DIR/build-tools/35.0.0/aidl"
 
-            echo "ERROR: AIDL NOT FOUND"
+          test -x \
+            "$SDK_DIR/platform-tools/adb"
 
-            exit 1
+          "$SDKMANAGER" \
+            --sdk_root="$SDK_DIR" \
+            --version
 
-          fi
+          echo "--------------------------------"
 
-          echo
-          echo "================================"
-          echo "ANDROID SDK READY"
-          echo "================================"
+          java -version
 
+          python --version
 
-      # ============================================================
-      # 11. VERIFY APPLICATION FILES
-      # ============================================================
-
-      - name: Verify application files
-        run: |
-          set -euxo pipefail
+          buildozer --version
 
           echo "================================"
-          echo "VERIFY APPLICATION"
-          echo "================================"
-
-          test -f main.py
-          test -f testov.kv
-          test -f buildozer.spec
-          test -d data
-
-          echo
-          echo "DAT FILES:"
-          echo
-
-          find data \
-            -maxdepth 1 \
-            -type f \
-            -name "*.dat" \
-            -print
-
-          DAT_COUNT=$(
-            find data \
-              -maxdepth 1 \
-              -type f \
-              -name "*.dat" \
-              | wc -l
-          )
-
-          echo
-          echo "DAT files found: $DAT_COUNT"
-
-          if [ "$DAT_COUNT" -eq 0 ]; then
-
-            echo "ERROR: NO DAT FILES FOUND"
-
-            exit 1
-
-          fi
-
-          echo
-          echo "================================"
-          echo "APPLICATION FILES OK"
+          echo "ENVIRONMENT READY"
           echo "================================"
 
 
       # ============================================================
-      # 12. CLEAN PROJECT BUILD
-      #
-      # Удаляем только локальный build проекта.
-      #
-      # НЕ удаляем:
-      # $HOME/.buildozer
-      #
-      # потому что там находится подготовленный Android SDK.
-      # ============================================================
-
-      - name: Clean previous application build
-        run: |
-          set -euxo pipefail
-
-          echo "================================"
-          echo "CLEAN PROJECT"
-          echo "================================"
-
-          rm -rf .buildozer
-          rm -rf bin
-
-          mkdir -p bin
-
-          echo "Project build directory cleaned."
-
-
-      # ============================================================
-      # 13. BUILD APK
-      #
-      # ВАЖНО:
-      #
-      # здесь НЕТ:
-      #
-      # yes | buildozer
-      #
-      # Лицензии уже приняты отдельно.
+      # 11. BUILD APK
       # ============================================================
 
       - name: Build APK
@@ -465,135 +467,114 @@ jobs:
           set -o pipefail
 
           echo "================================"
-          echo "BUILD APK"
+          echo "STARTING APK BUILD"
           echo "================================"
 
           buildozer -v android debug 2>&1 | tee build.log
 
 
       # ============================================================
-      # 14. BUILD DIAGNOSTICS
-      # ============================================================
-
-      - name: Show build diagnostics
-        if: failure()
-        run: |
-          echo "================================"
-          echo "LAST 500 BUILD LOG LINES"
-          echo "================================"
-
-          tail -500 build.log || true
-
-          echo
-          echo "================================"
-          echo "ERROR SEARCH"
-          echo "================================"
-
-          grep -i -n \
-            -E "error:|exception|traceback|failed|failure|not found|no such file|valueerror|sdkmanager|aidl" \
-            build.log \
-            | tail -200 || true
-
-
-      # ============================================================
-      # 15. UPLOAD BUILD LOG
+      # 12. UPLOAD BUILD LOG
       # ============================================================
 
       - name: Upload build log
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: build-log-${{ github.run_number }}
+          name: build-log
           path: build.log
           if-no-files-found: ignore
           retention-days: 7
 
-
       # ============================================================
-      # 16. SEARCH APK
+      # 13. SEARCH FOR APK
       # ============================================================
 
       - name: Search for APK
-        if: success()
+        if: always()
         run: |
-          set -euxo pipefail
+          echo "================================"
+          echo "SEARCHING FOR APK"
+          echo "================================"
 
+          find . \
+            -type f \
+            -name "*.apk" \
+            -print \
+            2>/dev/null || true
+
+
+      # ============================================================
+      # 14. VERIFY APK
+      # ============================================================
+
+      - name: Verify APK
+        run: |
           echo "================================"
-          echo "SEARCH APK"
+          echo "VERIFY APK"
           echo "================================"
+
+          APK_COUNT=$(find bin -type f -name "*.apk" | wc -l)
+
+          echo "APK files found: $APK_COUNT"
+
+          if [ "$APK_COUNT" -eq 0 ]; then
+            echo "ERROR: APK WAS NOT CREATED"
+            exit 1
+          fi
 
           find bin \
             -type f \
             -name "*.apk" \
             -ls
 
-          APK_COUNT=$(
-            find bin \
-              -type f \
-              -name "*.apk" \
-              | wc -l
-          )
-
-          echo
-          echo "APK files found: $APK_COUNT"
-
-          if [ "$APK_COUNT" -eq 0 ]; then
-
-            echo "ERROR: APK NOT FOUND"
-
-            exit 1
-
-          fi
+          echo "================================"
+          echo "APK BUILD SUCCESS"
+          echo "================================"
 
 
       # ============================================================
-      # 17. RENAME APK
+      # 15. RENAME APK
       # ============================================================
 
       - name: Rename APK
-        if: success()
         run: |
-          set -euxo pipefail
+          echo "================================"
+          echo "RENAMING APK"
+          echo "================================"
 
-          APK_FILE=$(
-            find bin \
-              -maxdepth 1 \
-              -type f \
-              -name "*.apk" \
-              | head -n 1
-          )
+          APK_FILE=$(find bin -maxdepth 1 -type f -name "*.apk" | head -n 1)
 
           if [ -z "$APK_FILE" ]; then
-
             echo "ERROR: APK FILE NOT FOUND"
-
             exit 1
-
           fi
 
-          NEW_APK="bin/TechProfi_${{ github.run_number }}.apk"
+          NEW_APK="bin/TEST_OVIK_${{ github.run_number }}.apk"
 
-          if [ "$APK_FILE" != "$NEW_APK" ]; then
-            mv "$APK_FILE" "$NEW_APK"
-          fi
+          mv "$APK_FILE" "$NEW_APK"
 
-          echo
+          echo "Original APK:"
+          echo "$APK_FILE"
+
+          echo "New APK:"
+          echo "$NEW_APK"
+
+          test -f "$NEW_APK"
+
           echo "================================"
-          echo "FINAL APK"
+          echo "APK RENAME SUCCESS"
           echo "================================"
-
-          ls -lh "$NEW_APK"
 
 
       # ============================================================
-      # 18. UPLOAD APK
+      # 16. UPLOAD APK
       # ============================================================
 
       - name: Upload APK
-        if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: TechProfi-${{ github.run_number }}
-          path: bin/TechProfi_${{ github.run_number }}.apk
+          name: TEST_OVIK_${{ github.run_number }}
+          path: bin/TEST_OVIK_${{ github.run_number }}.apk
           if-no-files-found: error
           retention-days: 14
