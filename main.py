@@ -300,6 +300,8 @@ class Login(Screen):
 class Test(Screen):
     question = StringProperty("")
     progress = StringProperty("")
+    progress_ratio = NumericProperty(0.0)
+    progress_percent = StringProperty("0%")
     timer = StringProperty("")
     source = StringProperty("")
     message = StringProperty("")
@@ -417,7 +419,25 @@ class Test(Screen):
         self.idx = max(0, min(self.idx, len(app.questions) - 1))
         question = app.questions[self.idx]
         self.question = question.get("text", "")
-        self.progress = f"Вопрос {self.idx + 1} из {len(app.questions)}"
+
+        total_questions = len(app.questions)
+        current_question = self.idx + 1
+
+        self.progress = (
+            f"Вопрос {current_question} из {total_questions}"
+        )
+
+        if total_questions:
+            self.progress_ratio = (
+                current_question / total_questions
+            )
+            self.progress_percent = (
+                f"{round(self.progress_ratio * 100)}%"
+            )
+        else:
+            self.progress_ratio = 0.0
+            self.progress_percent = "0%"
+
         self.message = ""
         self.source = ""
 
@@ -460,14 +480,14 @@ class Test(Screen):
                     font_name="AppArial",
                     font_size="16sp",
                     size_hint_y=None,
-                    height=dp(56),
-                    halign="center",
+                    height=dp(64),
+                    halign="left",
                     valign="middle",
-                    padding=(dp(12), dp(10)),
+                    padding=(dp(22), dp(10)),
                     color=(.08, .07, .06, 1),
                     background_normal="",
                     background_down="",
-                    background_color=(.92, .90, .87, 1),
+                    background_color=(.985, .975, .955, 1),
                 )
                 button.text_size = (max(Window.width - dp(70), dp(200)), None)
                 button.bind(texture_size=self._resize_answer_button)
@@ -491,9 +511,9 @@ class Test(Screen):
                 row = MultiAnswerRow(
                     orientation="horizontal",
                     size_hint_y=None,
-                    height=dp(56),
-                    spacing=dp(4),
-                    padding=(dp(6), dp(5)),
+                    height=dp(64),
+                    spacing=dp(6),
+                    padding=(dp(8), dp(6)),
                 )
 
                 checkbox = CheckBox(
@@ -538,17 +558,17 @@ class Test(Screen):
 
     def _single_state_changed(self, button, state):
         if state == "down":
-            button.background_color = (.78, .68, .57, 1)
+            button.background_color = (.86, .78, .68, 1)
             self.show_source_after_answer()
         else:
-            button.background_color = (.92, .90, .87, 1)
+            button.background_color = (.985, .975, .955, 1)
 
     def _multiple_state_changed(self, row, value):
         row.selected = value
         Clock.schedule_once(lambda dt: self.show_source_after_answer(), 0)
 
     def _resize_answer_button(self, button, texture_size):
-        button.height = max(dp(56), texture_size[1] + dp(24))
+        button.height = max(dp(64), texture_size[1] + dp(28))
 
     def _resize_multi_label(self, label, width):
         label.text_size = (width, None)
@@ -712,6 +732,7 @@ class AdminSettings(Screen):
             # Стандартный Kivy/Roboto корректно отображает кириллицу на Android.
             label = Label(
                 text=source_name,
+                font_name="Roboto",
                 font_size="14sp",
                 color=(.08, .07, .06, 1),
                 halign="left",
