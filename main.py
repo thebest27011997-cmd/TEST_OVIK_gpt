@@ -864,32 +864,45 @@ class TechProfiApp(App):
             pass
 
     def collect_sources(self):
-        self.source_catalog = discover_dat_sources()
+        """
+        Источники формируются прежде всего из questions.json.
+        Это гарантирует, что идентификаторы источников в настройках
+        полностью совпадают с source_id самих вопросов.
 
-        if not self.source_catalog and self.bank_name:
-            bank = clean_source_name(self.bank_name)
-            self.source_catalog = [{
-                "id": extract_source_code(bank),
-                "name": bank,
-                "filename": "",
-            }]
+        .dat используются только как резервный вариант.
+        """
+        catalog_by_id = {}
 
-        unique_catalog = []
-        used_ids = set()
-
-        for source in self.source_catalog:
-            source_id = source["id"]
+        for question in self.pool:
+            source_id = get_question_source_id(question, self.bank_name)
 
             if not source_id:
                 continue
-            if source_id in used_ids:
-                continue
 
-            used_ids.add(source_id)
-            unique_catalog.append(source)
+            if source_id not in catalog_by_id:
+                catalog_by_id[source_id] = {
+                    "id": source_id,
+                    "name": source_id,
+                    "filename": "",
+                }
 
-        self.source_catalog = unique_catalog
-        self.available_sources = [source["id"] for source in self.source_catalog]
+        if catalog_by_id:
+            self.source_catalog = sorted(
+                catalog_by_id.values(),
+                key=lambda item: item["name"].casefold(),
+            )
+        else:
+            # Резерв: если questions.json не содержит источников,
+            # пробуем получить их из .dat.
+            self.source_catalog = discover_dat_sources()
+
+        self.available_sources = [
+            source["id"]
+            for source in self.source_catalog
+            if source.get("id")
+        ]
+
+        # При первой установке / после обновления все источники доступны.
         self.selected_sources = set(self.available_sources)
 
     def load_user_settings(self):
