@@ -810,6 +810,10 @@ class AdminSettings(Screen):
 class TechProfiApp(App):
     title = APP_NAME
 
+    # Реактивный режим приложения.
+    # Нужен, чтобы testov.kv автоматически показывал/скрывал таймер.
+    mode = StringProperty("")
+
     question_count = NumericProperty(DEFAULT_NUM)
     test_minutes = NumericProperty(DEFAULT_MINUTES)
     pass_percent = NumericProperty(DEFAULT_PASS_PERCENT)
@@ -823,7 +827,6 @@ class TechProfiApp(App):
         self.saved = []
 
         self.user = ""
-        self.mode = ""
         self.seconds = 0
 
         self.source_catalog = []
