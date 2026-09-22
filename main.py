@@ -8,7 +8,7 @@ from kivy.app import App
 from kivy.clock import Clock
 from kivy.core.text import LabelBase
 from kivy.core.window import Window
-from kivy.graphics import Color, Line, Rectangle
+from kivy.graphics import Color, Line, Rectangle, RoundedRectangle
 from kivy.lang import Builder
 from kivy.metrics import dp
 from kivy.properties import BooleanProperty, NumericProperty, StringProperty
@@ -191,42 +191,115 @@ def is_numeric_answer(question):
 
 
 # =========================================================
-# MULTIPLE CHOICE
+# ВАРИАНТЫ ОТВЕТОВ
 # =========================================================
 
-class MultiAnswerRow(BoxLayout):
+class AnswerRowBase(BoxLayout):
     selected = BooleanProperty(False)
+    status = StringProperty("normal")
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.checkbox = None
 
         with self.canvas.before:
-            self.bg_color = Color(.97, .96, .94, 1)
-            self.bg_rect = Rectangle(pos=self.pos, size=self.size)
+            self.bg_color = Color(.99, .985, .97, 1)
+            self.bg_rect = RoundedRectangle(
+                pos=self.pos,
+                size=self.size,
+                radius=[dp(12)],
+            )
 
         with self.canvas.after:
-            Color(0, 0, 0, 1)
+            self.border_color = Color(.82, .76, .68, 1)
             self.border = Line(
-                rectangle=(self.x, self.y, self.width, self.height),
-                width=1.15,
+                rounded_rectangle=(
+                    self.x,
+                    self.y,
+                    self.width,
+                    self.height,
+                    dp(12),
+                ),
+                width=1.0,
             )
 
         self.bind(
             pos=self._update_canvas,
             size=self._update_canvas,
-            selected=self._update_selected,
+            selected=self._update_visual,
+            status=self._update_visual,
         )
+
+    def attach_checkbox(self, checkbox):
+        self.checkbox = checkbox
+        self._update_visual()
 
     def _update_canvas(self, *args):
         self.bg_rect.pos = self.pos
         self.bg_rect.size = self.size
-        self.border.rectangle = (self.x, self.y, self.width, self.height)
+        self.border.rounded_rectangle = (
+            self.x,
+            self.y,
+            self.width,
+            self.height,
+            dp(12),
+        )
 
-    def _update_selected(self, *args):
+    def _update_visual(self, *args):
+        # После нажатия "Ответ" в режиме обучения.
+        if self.status == "correct":
+            self.bg_color.rgba = (.84, .95, .85, 1)
+            self.border_color.rgba = (.08, .55, .20, 1)
+            if self.checkbox is not None:
+                self.checkbox.color = (.05, .55, .18, 1)
+            return
+
+        if self.status == "wrong":
+            self.bg_color.rgba = (.98, .84, .84, 1)
+            self.border_color.rgba = (.86, .12, .10, 1)
+            if self.checkbox is not None:
+                self.checkbox.color = (.90, .10, .08, 1)
+            return
+
+        # Обычное состояние до проверки ответа.
         if self.selected:
-            self.bg_color.rgba = (.82, .74, .64, 1)
+            self.bg_color.rgba = (.91, .85, .77, 1)
+            self.border_color.rgba = (.55, .42, .29, 1)
+            if self.checkbox is not None:
+                self.checkbox.color = (.48, .34, .22, 1)
         else:
-            self.bg_color.rgba = (.97, .96, .94, 1)
+            self.bg_color.rgba = (.99, .985, .97, 1)
+            self.border_color.rgba = (.82, .76, .68, 1)
+            if self.checkbox is not None:
+                self.checkbox.color = (.38, .38, .38, 1)
+
+
+class SingleAnswerRow(AnswerRowBase):
+    """Карточка одиночного ответа с круглым radio checkbox."""
+
+    def on_touch_down(self, touch):
+        if (
+            self.collide_point(*touch.pos)
+            and self.checkbox is not None
+            and not self.checkbox.disabled
+        ):
+            self.checkbox.active = True
+            return True
+        return super().on_touch_down(touch)
+
+
+class MultiAnswerRow(AnswerRowBase):
+    """Карточка множественного ответа с обычным checkbox."""
+
+    def on_touch_down(self, touch):
+        if (
+            self.collide_point(*touch.pos)
+            and self.checkbox is not None
+            and not self.checkbox.disabled
+        ):
+            self.checkbox.active = not self.checkbox.active
+            return True
+        return super().on_touch_down(touch)
 
 
 # =========================================================
@@ -305,6 +378,7 @@ class Test(Screen):
     timer = StringProperty("")
     source = StringProperty("")
     message = StringProperty("")
+    answer_revealed = BooleanProperty(False)
 
     idx = NumericProperty(0)
     event = None
@@ -318,6 +392,7 @@ class Test(Screen):
         app.seconds = int(app.test_minutes) * 60
         self.message = ""
         self.source = ""
+        self.answer_revealed = False
 
         if self.event:
             self.event.cancel()
@@ -358,9 +433,9 @@ class Test(Screen):
             return self.input.text.strip()
 
         if question_type == "один":
-            for button in self.btns or []:
-                if button.state == "down":
-                    return button.text
+            for option, checkbox, row in self.btns or []:
+                if checkbox.active:
+                    return option
             return ""
 
         if question_type == "несколько":
@@ -381,18 +456,6 @@ class Test(Screen):
 
     def has_answer(self):
         return bool(str(self.get_current_answer()).strip())
-
-    def show_source_after_answer(self, *args):
-        app = App.get_running_app()
-        if app.mode != "обучение":
-            return
-
-        if not self.has_answer():
-            self.source = ""
-            return
-
-        self.save_current()
-        self.show_source()
 
     def show_source(self):
         app = App.get_running_app()
@@ -423,27 +486,23 @@ class Test(Screen):
         total_questions = len(app.questions)
         current_question = self.idx + 1
 
-        self.progress = (
-            f"Вопрос {current_question} из {total_questions}"
-        )
+        self.progress = f"Вопрос {current_question} из {total_questions}"
 
         if total_questions:
-            self.progress_ratio = (
-                current_question / total_questions
-            )
-            self.progress_percent = (
-                f"{round(self.progress_ratio * 100)}%"
-            )
+            self.progress_ratio = current_question / total_questions
+            self.progress_percent = f"{round(self.progress_ratio * 100)}%"
         else:
             self.progress_ratio = 0.0
             self.progress_percent = "0%"
 
         self.message = ""
         self.source = ""
+        self.answer_revealed = False
 
         if app.mode == "контроль":
             self.timer = f"{app.seconds // 60:02d}:{app.seconds % 60:02d}"
         else:
+            # В режиме обучения таймер полностью скрыт.
             self.timer = ""
 
         answers_box = self.ids.answers
@@ -456,6 +515,7 @@ class Test(Screen):
 
         if question_type == "текстовый":
             keyboard_type = "number" if is_numeric_answer(question) else "text"
+
             self.input = TextInput(
                 text=saved_answer,
                 multiline=False,
@@ -467,60 +527,29 @@ class Test(Screen):
                 write_tab=False,
                 padding=(dp(14), dp(15)),
             )
-            self.input.bind(on_text_validate=self.show_source_after_answer)
-            self.input.bind(focus=self._text_focus_changed)
+
             answers_box.add_widget(self.input)
 
         elif question_type == "один":
-            for option in question.get("options", []):
-                option_text = str(option)
-                button = ToggleButton(
-                    text=option_text,
-                    group="answer_group",
-                    font_name="AppArial",
-                    font_size="16sp",
-                    size_hint_y=None,
-                    height=dp(64),
-                    halign="left",
-                    valign="middle",
-                    padding=(dp(22), dp(10)),
-                    color=(.08, .07, .06, 1),
-                    background_normal="",
-                    background_down="",
-                    background_color=(.985, .975, .955, 1),
-                )
-                button.text_size = (max(Window.width - dp(70), dp(200)), None)
-                button.bind(texture_size=self._resize_answer_button)
-                button.bind(state=self._single_state_changed)
-
-                if str(saved_answer).strip() == option_text:
-                    button.state = "down"
-
-                self._single_state_changed(button, button.state)
-                answers_box.add_widget(button)
-                self.btns.append(button)
-
-            if saved_answer and app.mode == "обучение":
-                self.show_source()
-
-        elif question_type == "несколько":
-            saved = canon_list(saved_answer)
+            group_name = f"single_answer_{id(self)}_{self.idx}"
 
             for option in question.get("options", []):
                 option_text = str(option)
-                row = MultiAnswerRow(
+
+                row = SingleAnswerRow(
                     orientation="horizontal",
                     size_hint_y=None,
-                    height=dp(64),
-                    spacing=dp(6),
-                    padding=(dp(8), dp(6)),
+                    height=dp(66),
+                    spacing=dp(8),
+                    padding=(dp(8), dp(7)),
                 )
 
                 checkbox = CheckBox(
-                    active=(option_text.casefold() in saved),
+                    active=(str(saved_answer).strip() == option_text),
+                    group=group_name,
                     size_hint_x=None,
-                    width=dp(42),
-                    color=(.20, .16, .12, 1),
+                    width=dp(46),
+                    color=(.38, .38, .38, 1),
                 )
 
                 label = Label(
@@ -531,52 +560,94 @@ class Test(Screen):
                     halign="left",
                     valign="middle",
                     size_hint_y=None,
-                    height=dp(46),
+                    height=dp(48),
                 )
 
-                label.bind(width=self._resize_multi_label)
-                label.bind(texture_size=self._resize_multi_row)
+                label.bind(width=self._resize_answer_label)
+                label.bind(
+                    texture_size=lambda lbl, size, r=row:
+                    self._resize_answer_row(lbl, size, r)
+                )
+
                 checkbox.bind(
-                    active=lambda cb, value, r=row: self._multiple_state_changed(r, value)
+                    active=lambda cb, value, r=row:
+                    self._single_checkbox_changed(r, value)
                 )
 
+                row.attach_checkbox(checkbox)
                 row.selected = checkbox.active
                 row.add_widget(checkbox)
                 row.add_widget(label)
+
                 answers_box.add_widget(row)
                 self.btns.append((option_text, checkbox, row))
 
-            if saved_answer and app.mode == "обучение":
-                self.show_source()
+        elif question_type == "несколько":
+            saved = canon_list(saved_answer)
+
+            for option in question.get("options", []):
+                option_text = str(option)
+
+                row = MultiAnswerRow(
+                    orientation="horizontal",
+                    size_hint_y=None,
+                    height=dp(66),
+                    spacing=dp(8),
+                    padding=(dp(8), dp(7)),
+                )
+
+                checkbox = CheckBox(
+                    active=(option_text.casefold() in saved),
+                    size_hint_x=None,
+                    width=dp(46),
+                    color=(.38, .38, .38, 1),
+                )
+
+                label = Label(
+                    text=option_text,
+                    font_name="AppArial",
+                    font_size="16sp",
+                    color=(.08, .07, .06, 1),
+                    halign="left",
+                    valign="middle",
+                    size_hint_y=None,
+                    height=dp(48),
+                )
+
+                label.bind(width=self._resize_answer_label)
+                label.bind(
+                    texture_size=lambda lbl, size, r=row:
+                    self._resize_answer_row(lbl, size, r)
+                )
+
+                checkbox.bind(
+                    active=lambda cb, value, r=row:
+                    self._multiple_checkbox_changed(r, value)
+                )
+
+                row.attach_checkbox(checkbox)
+                row.selected = checkbox.active
+                row.add_widget(checkbox)
+                row.add_widget(label)
+
+                answers_box.add_widget(row)
+                self.btns.append((option_text, checkbox, row))
 
         else:
             self.question = "Ошибка: неизвестный тип вопроса"
 
-    def _text_focus_changed(self, widget, focused):
-        if not focused:
-            self.show_source_after_answer()
-
-    def _single_state_changed(self, button, state):
-        if state == "down":
-            button.background_color = (.86, .78, .68, 1)
-            self.show_source_after_answer()
-        else:
-            button.background_color = (.985, .975, .955, 1)
-
-    def _multiple_state_changed(self, row, value):
+    def _single_checkbox_changed(self, row, value):
         row.selected = value
-        Clock.schedule_once(lambda dt: self.show_source_after_answer(), 0)
 
-    def _resize_answer_button(self, button, texture_size):
-        button.height = max(dp(64), texture_size[1] + dp(28))
+    def _multiple_checkbox_changed(self, row, value):
+        row.selected = value
 
-    def _resize_multi_label(self, label, width):
+    def _resize_answer_label(self, label, width):
         label.text_size = (width, None)
 
-    def _resize_multi_row(self, label, texture_size):
-        label.height = max(dp(46), texture_size[1] + dp(14))
-        if label.parent:
-            label.parent.height = label.height + dp(10)
+    def _resize_answer_row(self, label, texture_size, row):
+        label.height = max(dp(48), texture_size[1] + dp(16))
+        row.height = label.height + dp(14)
 
     def next(self):
         app = App.get_running_app()
@@ -614,24 +685,51 @@ class Test(Screen):
         if not app.questions:
             return
 
+        # Кнопка "Ответ" используется только в режиме обучения.
+        if app.mode != "обучение":
+            return
+
         if not self.has_answer():
             self.message = "Сначала выберите или введите ответ"
             return
 
         self.message = ""
         self.save_current()
+        self.answer_revealed = True
+
         question = app.questions[self.idx]
+        question_type = question.get("type", "")
         correct = question.get("correct", [])
 
-        if isinstance(correct, list):
-            correct_text = "; ".join(str(item) for item in correct)
+        if question_type in ("один", "несколько"):
+            correct_values = canon_list(correct)
+
+            for option, checkbox, row in self.btns or []:
+                option_key = str(option).strip().casefold()
+
+                if option_key in correct_values:
+                    # Все правильные ответы зелёные.
+                    row.status = "correct"
+                elif checkbox.active:
+                    # Выбранные ошибочные ответы красные.
+                    row.status = "wrong"
+                else:
+                    row.status = "normal"
+
+                checkbox.disabled = True
+
         else:
-            correct_text = str(correct)
+            if isinstance(correct, list):
+                correct_text = "; ".join(str(item) for item in correct)
+            else:
+                correct_text = str(correct)
 
-        self.message = "Правильный ответ: " + correct_text
+            self.message = "Правильный ответ: " + correct_text
 
-        if app.mode == "обучение":
-            self.show_source()
+            if self.input is not None:
+                self.input.disabled = True
+
+        self.show_source()
 
     def finish(self):
         app = App.get_running_app()
