@@ -2,6 +2,7 @@ import json
 import math
 import random
 import re
+from datetime import datetime
 from pathlib import Path
 
 from kivy.app import App
@@ -43,16 +44,12 @@ DEFAULT_MINUTES = 15
 DEFAULT_PASS_PERCENT = 80
 
 
+
 # =========================================================
 # ПОЛНЫЕ НАЗВАНИЯ НОРМАТИВНЫХ ДОКУМЕНТОВ
 # =========================================================
-#
-# ВАЖНО:
-# source_id остаются короткими и стабильными.
-# .dat-файлы также остаются с короткими именами.
-# Полные названия используются только для отображения
-# пользователю в настройках и в блоке "Источник".
-#
+# source_id и имена .dat остаются короткими и стабильными.
+# Полные названия используются только в интерфейсе.
 SOURCE_DISPLAY_NAMES = {
     "СП 50.13330.2024":
         "СП 50.13330.2024 — Тепловая защита зданий",
@@ -132,8 +129,6 @@ def extract_source_code(text):
     if match:
         return match.group(0).strip()
 
-    # Полное название федерального закона:
-    # "Федеральный закон от 30.12.2009 № 384-ФЗ ..."
     match = re.search(
         r"Федеральный\s+закон.*?(?:№|N)\s*(\d+)",
         text,
@@ -142,7 +137,6 @@ def extract_source_code(text):
     if match:
         return f"Федеральный закон {match.group(1)}"
 
-    # Короткий вариант: "Федеральный закон 384"
     match = re.search(
         r"Федеральный\s+закон\s+(\d+)",
         text,
@@ -151,8 +145,6 @@ def extract_source_code(text):
     if match:
         return f"Федеральный закон {match.group(1)}"
 
-    # Полное название постановления:
-    # "Постановление Правительства РФ от ... № 87 ..."
     match = re.search(
         r"Постановление\s+Правительства.*?(?:№|N)\s*(\d+)",
         text,
@@ -161,7 +153,6 @@ def extract_source_code(text):
     if match:
         return f"Постановление Правительства {match.group(1)}"
 
-    # Короткий вариант: "Постановление Правительства 87"
     match = re.search(
         r"Постановление\s+Правительства\s+(\d+)",
         text,
@@ -429,6 +420,11 @@ class Login(Screen):
         settings_screen.load_values()
         self.manager.current = "settings"
 
+    def open_results(self):
+        results_screen = self.manager.get_screen("results_history")
+        results_screen.load_results()
+        self.manager.current = "results_history"
+
     def start(self, mode):
         name = self.ids.name.text.strip()
 
@@ -482,6 +478,7 @@ class Test(Screen):
         self.message = ""
         self.source = ""
         self.answer_revealed = False
+        self.result_recorded = False
 
         if self.event:
             self.event.cancel()
@@ -573,28 +570,20 @@ class Test(Screen):
                 )
                 if part
             ]
-
             self.source = "\n\n".join(parts)
             return
 
         source_text = clean_source_name(source)
 
         if source_text:
-            # Если исходная строка уже содержит обозначение документа,
-            # заменяем только его на полное отображаемое название.
             if source_id and source_id in source_text:
-                source_text = source_text.replace(
+                self.source = source_text.replace(
                     source_id,
                     full_document_name,
                     1,
                 )
-                self.source = source_text
             elif full_document_name:
-                self.source = (
-                    full_document_name
-                    + "\n\n"
-                    + source_text
-                )
+                self.source = full_document_name + "\n\n" + source_text
             else:
                 self.source = source_text
         else:
@@ -874,17 +863,30 @@ class Test(Screen):
             if is_correct(question, answer):
                 score += 1
 
+        total = len(app.questions)
+        percent = round((score / total) * 100) if total else 0
+
         required_score = math.ceil(
-            len(app.questions) * int(app.pass_percent) / 100
+            total * int(app.pass_percent) / 100
         )
         passed = score >= required_score
+
+        if app.mode == "контроль" and not self.result_recorded:
+            app.save_control_result(
+                user=app.user,
+                score=score,
+                total=total,
+                percent=percent,
+                passed=passed,
+            )
+            self.result_recorded = True
 
         result = self.manager.get_screen("result")
         status = "Тест пройден" if passed else "Тест не пройден"
 
         result.text = (
             f"{app.user}\n\n"
-            f"Результат: {score} из {len(app.questions)}\n\n"
+            f"Результат: {score} из {total} — {percent}%\n\n"
             f"Условие успешного прохождения: {int(app.pass_percent)}%\n\n"
             f"{status}"
         )
@@ -898,6 +900,157 @@ class Test(Screen):
 
 class Result(Screen):
     text = StringProperty("")
+
+
+
+
+class ResultHistoryCard(BoxLayout):
+    """Карточка одного контрольного тестирования."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+        with self.canvas.before:
+            self.card_color = Color(.99, .98, .96, 1)
+            self.card_rect = RoundedRectangle(
+                pos=self.pos,
+                size=self.size,
+                radius=[dp(12)],
+            )
+
+        with self.canvas.after:
+            self.card_border_color = Color(.84, .78, .70, 1)
+            self.card_border = Line(
+                rounded_rectangle=(
+                    self.x,
+                    self.y,
+                    self.width,
+                    self.height,
+                    dp(12),
+                ),
+                width=1.0,
+            )
+
+        self.bind(pos=self._update_canvas, size=self._update_canvas)
+
+    def _update_canvas(self, *args):
+        self.card_rect.pos = self.pos
+        self.card_rect.size = self.size
+        self.card_border.rounded_rectangle = (
+            self.x,
+            self.y,
+            self.width,
+            self.height,
+            dp(12),
+        )
+
+
+class ResultsHistory(Screen):
+    def on_pre_enter(self, *args):
+        self.load_results()
+
+    def load_results(self):
+        if "results_box" not in self.ids:
+            return
+
+        app = App.get_running_app()
+        box = self.ids.results_box
+        box.clear_widgets()
+
+        records = app.load_control_results()
+
+        if not records:
+            empty = Label(
+                text="Пока нет результатов контрольного тестирования",
+                font_name="AppArial",
+                font_size="16sp",
+                color=(.35, .32, .28, 1),
+                size_hint_y=None,
+                height=dp(90),
+                halign="center",
+                valign="middle",
+            )
+            empty.bind(
+                size=lambda lbl, size: setattr(lbl, "text_size", size)
+            )
+            box.add_widget(empty)
+            return
+
+        for record in records:
+            user = str(record.get("user", "")).strip() or "Без имени"
+            date_time = str(record.get("datetime", "")).strip()
+            score = int(record.get("score", 0))
+            total = int(record.get("total", 0))
+            percent = int(record.get("percent", 0))
+            status = str(record.get("status", "")).strip()
+
+            card = ResultHistoryCard(
+                orientation="vertical",
+                size_hint_y=None,
+                height=dp(154),
+                padding=(dp(16), dp(12)),
+                spacing=dp(5),
+            )
+
+            def make_label(text, font_size, height, bold=False, color=None):
+                label = Label(
+                    text=text,
+                    font_name="AppArial",
+                    font_size=font_size,
+                    bold=bold,
+                    color=color or (.08, .07, .06, 1),
+                    size_hint_y=None,
+                    height=height,
+                    halign="left",
+                    valign="middle",
+                )
+                label.bind(
+                    size=lambda lbl, size: setattr(lbl, "text_size", size)
+                )
+                return label
+
+            card.add_widget(
+                make_label(
+                    user,
+                    "17sp",
+                    dp(26),
+                    bold=True,
+                )
+            )
+            card.add_widget(
+                make_label(
+                    date_time,
+                    "13sp",
+                    dp(24),
+                    color=(.25, .22, .19, 1),
+                )
+            )
+            card.add_widget(
+                make_label(
+                    f"Результат: {score} из {total} — {percent}%",
+                    "15sp",
+                    dp(28),
+                    bold=True,
+                )
+            )
+
+            passed = status == "Пройден"
+            card.add_widget(
+                make_label(
+                    "Тест пройден" if passed else "Тест не пройден",
+                    "15sp",
+                    dp(28),
+                    bold=True,
+                    color=(.10, .48, .18, 1)
+                    if passed
+                    else (.72, .12, .10, 1),
+                )
+            )
+
+            box.add_widget(card)
+
+    def go_back(self):
+        self.manager.current = "login"
 
 
 # =========================================================
@@ -942,7 +1095,7 @@ class AdminSettings(Screen):
                 size_hint_y=None,
                 height=dp(78),
                 spacing=dp(8),
-                padding=(dp(8), dp(8)),
+                padding=(dp(8), dp(6)),
             )
 
             checkbox = CheckBox(
@@ -961,17 +1114,9 @@ class AdminSettings(Screen):
                 color=(.08, .07, .06, 1),
                 halign="left",
                 valign="middle",
-                size_hint_y=None,
-                height=dp(54),
             )
 
-            label.bind(
-                width=self._update_source_label,
-            )
-            label.bind(
-                texture_size=lambda lbl, size, r=row:
-                self._resize_source_row(lbl, size, r)
-            )
+            label.bind(size=self._update_source_label)
             checkbox.bind(
                 active=lambda cb, value, sid=source_id: self.on_source_checkbox(sid, value)
             )
@@ -982,12 +1127,8 @@ class AdminSettings(Screen):
 
         self.update_select_all_checkbox()
 
-    def _update_source_label(self, label, width):
-        label.text_size = (width, None)
-
-    def _resize_source_row(self, label, texture_size, row):
-        label.height = max(dp(54), texture_size[1] + dp(12))
-        row.height = max(dp(78), label.height + dp(16))
+    def _update_source_label(self, label, size):
+        label.text_size = (size[0], None)
 
     def on_source_checkbox(self, source_id, active):
         app = App.get_running_app()
@@ -1091,6 +1232,7 @@ class TechProfiApp(App):
         self.selected_sources = set()
 
         self.settings_path = None
+        self.results_path = None
 
     def build(self):
         self.bank_name, self.pool = load_bank()
@@ -1107,11 +1249,13 @@ class TechProfiApp(App):
         manager.add_widget(Login(name="login"))
         manager.add_widget(Test(name="test"))
         manager.add_widget(Result(name="result"))
+        manager.add_widget(ResultsHistory(name="results_history"))
         manager.add_widget(AdminSettings(name="settings"))
         return manager
 
     def on_start(self):
         self.settings_path = Path(self.user_data_dir) / "settings.json"
+        self.results_path = Path(self.user_data_dir) / "results.json"
         self.load_user_settings()
 
         if not self.root:
@@ -1224,6 +1368,57 @@ class TechProfiApp(App):
             with self.settings_path.open("w", encoding="utf-8") as file:
                 json.dump(data, file, ensure_ascii=False, indent=2)
 
+            return True
+
+        except Exception:
+            return False
+
+    def load_control_results(self):
+        if not self.results_path:
+            self.results_path = Path(self.user_data_dir) / "results.json"
+
+        if not self.results_path.exists():
+            return []
+
+        try:
+            with self.results_path.open("r", encoding="utf-8") as file:
+                data = json.load(file)
+
+            return data if isinstance(data, list) else []
+
+        except Exception:
+            return []
+
+    def save_control_result(self, user, score, total, percent, passed):
+        if not self.results_path:
+            self.results_path = Path(self.user_data_dir) / "results.json"
+
+        records = self.load_control_results()
+
+        record = {
+            "user": str(user or "").strip(),
+            "datetime": datetime.now().strftime("%d.%m.%Y · %H:%M"),
+            "score": int(score),
+            "total": int(total),
+            "percent": int(percent),
+            "status": "Пройден" if passed else "Не пройден",
+        }
+
+        records.insert(0, record)
+
+        try:
+            self.results_path.parent.mkdir(parents=True, exist_ok=True)
+            temp_path = self.results_path.with_suffix(".tmp")
+
+            with temp_path.open("w", encoding="utf-8") as file:
+                json.dump(
+                    records,
+                    file,
+                    ensure_ascii=False,
+                    indent=2,
+                )
+
+            temp_path.replace(self.results_path)
             return True
 
         except Exception:
