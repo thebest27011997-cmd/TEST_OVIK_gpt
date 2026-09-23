@@ -872,10 +872,16 @@ class Result(Screen):
 
 
 class ResultHistoryCard(BoxLayout):
-    """Карточка результата."""
+    """Карточка результата с автоматической высотой по содержимому."""
 
     def __init__(self, **kwargs):
+        kwargs.setdefault("orientation", "vertical")
+        kwargs.setdefault("size_hint_y", None)
         super().__init__(**kwargs)
+
+        # Высота карточки всегда равна реальной высоте её содержимого.
+        # Это убирает наложение длинных вопросов, источников и ответов.
+        self.bind(minimum_height=self._sync_height)
 
         with self.canvas.before:
             self.card_color = Color(.99, .98, .96, 1)
@@ -898,7 +904,13 @@ class ResultHistoryCard(BoxLayout):
                 width=1.0,
             )
 
-        self.bind(pos=self._update_canvas, size=self._update_canvas)
+        self.bind(
+            pos=self._update_canvas,
+            size=self._update_canvas,
+        )
+
+    def _sync_height(self, _instance, minimum_height):
+        self.height = max(dp(70), minimum_height)
 
     def _update_canvas(self, *args):
         self.card_rect.pos = self.pos
@@ -913,22 +925,46 @@ class ResultHistoryCard(BoxLayout):
 
 
 def _history_label(text, font_size="14sp", bold=False, color=None):
+    """
+    Текст для истории/подробного результата.
+
+    Ширина текста теперь зависит от реальной ширины виджета,
+    а высота автоматически растёт при переносе строк.
+    """
     label = Label(
         text=str(text),
         font_name="AppArial",
         font_size=font_size,
         bold=bold,
         color=color or (.08, .07, .06, 1),
+        size_hint_x=1,
         size_hint_y=None,
         halign="left",
         valign="top",
     )
-    label.text_size = (Window.width - dp(84), None)
 
-    def resize(_instance, texture_size):
-        label.height = max(dp(24), texture_size[1] + dp(6))
+    def update_width(instance, width):
+        instance.text_size = (
+            max(dp(60), width),
+            None,
+        )
 
-    label.bind(texture_size=resize)
+    def update_height(instance, texture_size):
+        instance.height = max(
+            dp(24),
+            texture_size[1] + dp(8),
+        )
+
+    label.bind(
+        width=update_width,
+        texture_size=update_height,
+    )
+
+    Clock.schedule_once(
+        lambda _dt: update_width(label, label.width),
+        0,
+    )
+
     return label
 
 
@@ -975,10 +1011,8 @@ class ResultsHistory(Screen):
 
             card = ResultHistoryCard(
                 orientation="vertical",
-                size_hint_y=None,
-                height=dp(220),
                 padding=(dp(16), dp(12)),
-                spacing=dp(4),
+                spacing=dp(5),
             )
 
             card.add_widget(_history_label(user, "17sp", bold=True))
@@ -1041,6 +1075,7 @@ class ResultsHistory(Screen):
             button.bind(
                 on_release=lambda _btn, i=index: self.open_details(i)
             )
+
             card.add_widget(button)
             box.add_widget(card)
 
@@ -1077,20 +1112,145 @@ class ResultDetails(Screen):
         status = str(record.get("status", "")).strip()
         duration = str(record.get("duration", "")).strip()
 
+        # Верхнее резюме.
         lines = [
             user,
             date_time,
             f"Результат: {score} из {total} — {percent}%",
             f"Статус: {status}",
         ]
+
         if pass_percent:
             lines.append(f"Проходной порог: {pass_percent}%")
+
         if duration:
             lines.append(f"Время прохождения: {duration}")
 
         self.summary_text = "\n".join(lines)
 
+        # =====================================================
+        # 1. СНАЧАЛА — ОТВЕТЫ ПО ВОПРОСАМ
+        # =====================================================
+        questions = record.get("questions", [])
+
+        # Для старых/изменённых записей гарантируем порядок:
+        # Вопрос 1, Вопрос 2, Вопрос 3...
+        questions = sorted(
+            questions,
+            key=lambda item: int(item.get("number", 0) or 0),
+        )
+
+        if questions:
+            box.add_widget(
+                _history_label(
+                    "Ответы по вопросам",
+                    "17sp",
+                    bold=True,
+                )
+            )
+
+            for item in questions:
+                number = int(item.get("number", 0) or 0)
+                question_text = str(
+                    item.get("question", "")
+                ).strip()
+
+                source_name = str(
+                    item.get("source_name", "")
+                ).strip()
+
+                user_answer = str(
+                    item.get("user_answer", "")
+                ).strip() or "Нет ответа"
+
+                correct_answer = str(
+                    item.get("correct_answer", "")
+                ).strip() or "Не указан"
+
+                correct = bool(
+                    item.get("is_correct", False)
+                )
+
+                card = ResultHistoryCard(
+                    orientation="vertical",
+                    padding=(dp(14), dp(12)),
+                    spacing=dp(7),
+                )
+
+                # Порядок внутри карточки:
+                # 1) вопрос
+                # 2) ответ пользователя
+                # 3) правильный ответ
+                # 4) результат
+                # 5) источник
+                card.add_widget(
+                    _history_label(
+                        f"{number}. {question_text}",
+                        "15sp",
+                        bold=True,
+                    )
+                )
+
+                card.add_widget(
+                    _history_label(
+                        f"Ответ пользователя: {user_answer}",
+                        "13sp",
+                    )
+                )
+
+                card.add_widget(
+                    _history_label(
+                        f"Правильный ответ: {correct_answer}",
+                        "13sp",
+                    )
+                )
+
+                card.add_widget(
+                    _history_label(
+                        "Верно" if correct else "Неверно",
+                        "14sp",
+                        bold=True,
+                        color=(.10, .48, .18, 1)
+                        if correct
+                        else (.72, .12, .10, 1),
+                    )
+                )
+
+                if source_name:
+                    card.add_widget(
+                        _history_label(
+                            f"Источник: {source_name}",
+                            "12sp",
+                            color=(.35, .32, .28, 1),
+                        )
+                    )
+
+                box.add_widget(card)
+
+        else:
+            box.add_widget(
+                _history_label(
+                    "Для этой старой записи подробные ответы "
+                    "не сохранялись.",
+                    "14sp",
+                    color=(.45, .40, .35, 1),
+                )
+            )
+
+        # =====================================================
+        # 2. ПОСЛЕ ВОПРОСОВ — СТАТИСТИКА ПО ДОКУМЕНТАМ
+        # =====================================================
         source_stats = record.get("source_stats", [])
+
+        # На экране всегда одинаковый алфавитный порядок,
+        # в том числе для старых записей.
+        source_stats = sorted(
+            source_stats,
+            key=lambda item: str(
+                item.get("source_name", "")
+            ).casefold(),
+        )
+
         if source_stats:
             box.add_widget(
                 _history_label(
@@ -1101,95 +1261,50 @@ class ResultDetails(Screen):
             )
 
             for stat in source_stats:
-                box.add_widget(
+                source_name = str(
+                    stat.get("source_name", "")
+                ).strip()
+
+                correct_count = int(
+                    stat.get("correct", 0)
+                )
+                total_count = int(
+                    stat.get("total", 0)
+                )
+                source_percent = int(
+                    stat.get("percent", 0)
+                )
+
+                source_card = ResultHistoryCard(
+                    orientation="vertical",
+                    padding=(dp(14), dp(10)),
+                    spacing=dp(4),
+                )
+
+                source_card.add_widget(
                     _history_label(
-                        f"{stat.get('source_name', '')}\n"
-                        f"{int(stat.get('correct', 0))} из "
-                        f"{int(stat.get('total', 0))} — "
-                        f"{int(stat.get('percent', 0))}%",
+                        source_name,
                         "14sp",
+                        bold=True,
                     )
                 )
 
-        questions = record.get("questions", [])
-        if not questions:
-            box.add_widget(
-                _history_label(
-                    "Для этой старой записи подробные ответы "
-                    "не сохранялись.",
-                    "14sp",
-                    color=(.45, .40, .35, 1),
+                source_card.add_widget(
+                    _history_label(
+                        f"{correct_count} из {total_count} — "
+                        f"{source_percent}%",
+                        "13sp",
+                        color=(.35, .32, .28, 1),
+                    )
                 )
-            )
-            return
 
-        box.add_widget(
-            _history_label(
-                "Ответы по вопросам",
-                "17sp",
-                bold=True,
-            )
-        )
-
-        for item in questions:
-            number = int(item.get("number", 0))
-            question_text = str(item.get("question", "")).strip()
-            source_name = str(item.get("source_name", "")).strip()
-            user_answer = str(item.get("user_answer", "")).strip() or "Нет ответа"
-            correct_answer = str(item.get("correct_answer", "")).strip()
-            correct = bool(item.get("is_correct", False))
-
-            card = ResultHistoryCard(
-                orientation="vertical",
-                size_hint_y=None,
-                height=dp(220),
-                padding=(dp(14), dp(12)),
-                spacing=dp(5),
-            )
-
-            card.add_widget(
-                _history_label(
-                    f"{number}. {question_text}",
-                    "15sp",
-                    bold=True,
-                )
-            )
-            card.add_widget(
-                _history_label(
-                    f"Источник: {source_name}",
-                    "12sp",
-                    color=(.35, .32, .28, 1),
-                )
-            )
-            card.add_widget(
-                _history_label(
-                    f"Ответ пользователя: {user_answer}",
-                    "13sp",
-                )
-            )
-            card.add_widget(
-                _history_label(
-                    f"Правильный ответ: {correct_answer}",
-                    "13sp",
-                )
-            )
-            card.add_widget(
-                _history_label(
-                    "Верно" if correct else "Неверно",
-                    "14sp",
-                    bold=True,
-                    color=(.10, .48, .18, 1)
-                    if correct
-                    else (.72, .12, .10, 1),
-                )
-            )
-
-            box.add_widget(card)
+                box.add_widget(source_card)
 
     def go_back(self):
         history = self.manager.get_screen("results_history")
         history.load_results()
         self.manager.current = "results_history"
+
 
 
 # =========================================================
