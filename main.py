@@ -15,6 +15,7 @@ from kivy.metrics import dp
 from kivy.properties import BooleanProperty, NumericProperty, StringProperty
 from kivy.resources import resource_add_path
 from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.button import Button
 from kivy.uix.checkbox import CheckBox
 from kivy.uix.label import Label
 from kivy.uix.screenmanager import Screen, ScreenManager
@@ -37,51 +38,37 @@ FONT_PATH = BASE / "fonts" / "Arial.ttf"
 FONT_BOLD_PATH = BASE / "fonts" / "Arial-Bold.ttf"
 
 APP_NAME = "ТехПрофи"
-ADMIN_CODE = "TEST_OVIK"
 
 DEFAULT_NUM = 25
 DEFAULT_MINUTES = 15
 DEFAULT_PASS_PERCENT = 80
 
 
-
 # =========================================================
 # ПОЛНЫЕ НАЗВАНИЯ НОРМАТИВНЫХ ДОКУМЕНТОВ
 # =========================================================
-# source_id и имена .dat остаются короткими и стабильными.
-# Полные названия используются только в интерфейсе.
 SOURCE_DISPLAY_NAMES = {
-    "СП 50.13330.2024":
-        "СП 50.13330.2024 — Тепловая защита зданий",
-
+    "СП 50.13330.2024": "СП 50.13330.2024 — Тепловая защита зданий",
     "СП 510.1325800.2022":
         "СП 510.1325800.2022 — Тепловые пункты и системы "
         "внутреннего теплоснабжения",
-
     "СП 73.13330.2016":
         "СП 73.13330.2016 — Внутренние санитарно-технические "
         "системы зданий",
-
     "СП 60.13330.2020":
         "СП 60.13330.2020 — Отопление, вентиляция и "
         "кондиционирование воздуха",
-
     "СП 246.1325800.2023":
         "СП 246.1325800.2023 — Положение об авторском надзоре "
         "при строительстве, реконструкции и капитальном ремонте "
         "объектов капитального строительства",
-
-    "СП 124.13330.2012":
-        "СП 124.13330.2012 — Тепловые сети",
-
+    "СП 124.13330.2012": "СП 124.13330.2012 — Тепловые сети",
     "СП 7.13130.2013":
         "СП 7.13130.2013 — Отопление, вентиляция и "
         "кондиционирование. Требования пожарной безопасности",
-
     "Федеральный закон 384":
         "Федеральный закон от 30.12.2009 № 384-ФЗ — "
         "Технический регламент о безопасности зданий и сооружений",
-
     "Постановление Правительства 87":
         "Постановление Правительства РФ от 16.02.2008 № 87 — "
         "О составе разделов проектной документации и требованиях "
@@ -162,7 +149,6 @@ def extract_source_code(text):
         return f"Постановление Правительства {match.group(1)}"
 
     return text
-
 
 def discover_dat_sources():
     result = []
@@ -388,34 +374,12 @@ class MultiAnswerRow(AnswerRowBase):
 
 class Login(Screen):
     bank = StringProperty("")
-    admin_enabled = BooleanProperty(False)
 
     def on_pre_enter(self, *args):
         app = App.get_running_app()
         self.bank = getattr(app, "bank_name", "")
-        self.update_admin_state()
-
-    def update_admin_state(self, *args):
-        if "name" not in self.ids:
-            return
-
-        value = self.ids.name.text.strip()
-        self.admin_enabled = value == ADMIN_CODE
-
-        if self.admin_enabled:
-            self.ids.msg.text = "Административный режим доступен"
-            self.ids.msg.color = (.10, .45, .15, 1)
-        else:
-            if self.ids.msg.text == "Административный режим доступен":
-                self.ids.msg.text = ""
-            self.ids.msg.color = (.75, .10, .10, 1)
 
     def open_settings(self):
-        self.update_admin_state()
-        if not self.admin_enabled:
-            return
-
-        self.ids.name.text = ""
         settings_screen = self.manager.get_screen("settings")
         settings_screen.load_values()
         self.manager.current = "settings"
@@ -430,10 +394,6 @@ class Login(Screen):
 
         if not name:
             self.ids.msg.text = "Введите фамилию и инициалы"
-            return
-
-        if name == ADMIN_CODE:
-            self.ids.msg.text = "Для запуска тестирования введите ФИО тестируемого"
             return
 
         app = App.get_running_app()
@@ -872,12 +832,21 @@ class Test(Screen):
         passed = score >= required_score
 
         if app.mode == "контроль" and not self.result_recorded:
+            configured_seconds = int(app.test_minutes) * 60
+            duration_seconds = max(
+                0,
+                configured_seconds - int(app.seconds),
+            )
+
             app.save_control_result(
                 user=app.user,
                 score=score,
                 total=total,
                 percent=percent,
                 passed=passed,
+                questions=app.questions,
+                answers=app.saved,
+                duration_seconds=duration_seconds,
             )
             self.result_recorded = True
 
@@ -902,10 +871,8 @@ class Result(Screen):
     text = StringProperty("")
 
 
-
-
 class ResultHistoryCard(BoxLayout):
-    """Карточка одного контрольного тестирования."""
+    """Карточка результата."""
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -945,6 +912,26 @@ class ResultHistoryCard(BoxLayout):
         )
 
 
+def _history_label(text, font_size="14sp", bold=False, color=None):
+    label = Label(
+        text=str(text),
+        font_name="AppArial",
+        font_size=font_size,
+        bold=bold,
+        color=color or (.08, .07, .06, 1),
+        size_hint_y=None,
+        halign="left",
+        valign="top",
+    )
+    label.text_size = (Window.width - dp(84), None)
+
+    def resize(_instance, texture_size):
+        label.height = max(dp(24), texture_size[1] + dp(6))
+
+    label.bind(texture_size=resize)
+    return label
+
+
 class ResultsHistory(Screen):
     def on_pre_enter(self, *args):
         self.load_results()
@@ -976,70 +963,45 @@ class ResultsHistory(Screen):
             box.add_widget(empty)
             return
 
-        for record in records:
+        for index, record in enumerate(records):
             user = str(record.get("user", "")).strip() or "Без имени"
             date_time = str(record.get("datetime", "")).strip()
             score = int(record.get("score", 0))
             total = int(record.get("total", 0))
             percent = int(record.get("percent", 0))
             status = str(record.get("status", "")).strip()
+            duration = str(record.get("duration", "")).strip()
+            details = record.get("questions", [])
 
             card = ResultHistoryCard(
                 orientation="vertical",
                 size_hint_y=None,
-                height=dp(154),
+                height=dp(220),
                 padding=(dp(16), dp(12)),
-                spacing=dp(5),
+                spacing=dp(4),
             )
 
-            def make_label(text, font_size, height, bold=False, color=None):
-                label = Label(
-                    text=text,
-                    font_name="AppArial",
-                    font_size=font_size,
-                    bold=bold,
-                    color=color or (.08, .07, .06, 1),
-                    size_hint_y=None,
-                    height=height,
-                    halign="left",
-                    valign="middle",
-                )
-                label.bind(
-                    size=lambda lbl, size: setattr(lbl, "text_size", size)
-                )
-                return label
-
+            card.add_widget(_history_label(user, "17sp", bold=True))
             card.add_widget(
-                make_label(
-                    user,
-                    "17sp",
-                    dp(26),
-                    bold=True,
-                )
-            )
-            card.add_widget(
-                make_label(
+                _history_label(
                     date_time,
                     "13sp",
-                    dp(24),
                     color=(.25, .22, .19, 1),
                 )
             )
             card.add_widget(
-                make_label(
+                _history_label(
                     f"Результат: {score} из {total} — {percent}%",
                     "15sp",
-                    dp(28),
                     bold=True,
                 )
             )
 
             passed = status == "Пройден"
             card.add_widget(
-                make_label(
+                _history_label(
                     "Тест пройден" if passed else "Тест не пройден",
                     "15sp",
-                    dp(28),
                     bold=True,
                     color=(.10, .48, .18, 1)
                     if passed
@@ -1047,17 +1009,194 @@ class ResultsHistory(Screen):
                 )
             )
 
+            if duration:
+                card.add_widget(
+                    _history_label(
+                        f"Время прохождения: {duration}",
+                        "13sp",
+                        color=(.35, .32, .28, 1),
+                    )
+                )
+
+            if details:
+                card.add_widget(
+                    _history_label(
+                        "Подробные ответы сохранены",
+                        "13sp",
+                        color=(.35, .32, .28, 1),
+                    )
+                )
+
+            button = Button(
+                text="Подробнее",
+                font_name="AppArial",
+                font_size="14sp",
+                color=(1, .98, .95, 1),
+                background_normal="",
+                background_down="",
+                background_color=(.48, .36, .25, 1),
+                size_hint_y=None,
+                height=dp(42),
+            )
+            button.bind(
+                on_release=lambda _btn, i=index: self.open_details(i)
+            )
+            card.add_widget(button)
             box.add_widget(card)
+
+    def open_details(self, index):
+        details_screen = self.manager.get_screen("result_details")
+        details_screen.load_record(index)
+        self.manager.current = "result_details"
 
     def go_back(self):
         self.manager.current = "login"
+
+
+class ResultDetails(Screen):
+    summary_text = StringProperty("")
+
+    def load_record(self, index):
+        app = App.get_running_app()
+        records = app.load_control_results()
+        box = self.ids.details_box
+        box.clear_widgets()
+
+        if not (0 <= index < len(records)):
+            self.summary_text = "Запись не найдена"
+            return
+
+        record = records[index]
+
+        user = str(record.get("user", "")).strip() or "Без имени"
+        date_time = str(record.get("datetime", "")).strip()
+        score = int(record.get("score", 0))
+        total = int(record.get("total", 0))
+        percent = int(record.get("percent", 0))
+        pass_percent = int(record.get("pass_percent", 0))
+        status = str(record.get("status", "")).strip()
+        duration = str(record.get("duration", "")).strip()
+
+        lines = [
+            user,
+            date_time,
+            f"Результат: {score} из {total} — {percent}%",
+            f"Статус: {status}",
+        ]
+        if pass_percent:
+            lines.append(f"Проходной порог: {pass_percent}%")
+        if duration:
+            lines.append(f"Время прохождения: {duration}")
+
+        self.summary_text = "\n".join(lines)
+
+        source_stats = record.get("source_stats", [])
+        if source_stats:
+            box.add_widget(
+                _history_label(
+                    "По нормативным документам",
+                    "17sp",
+                    bold=True,
+                )
+            )
+
+            for stat in source_stats:
+                box.add_widget(
+                    _history_label(
+                        f"{stat.get('source_name', '')}\n"
+                        f"{int(stat.get('correct', 0))} из "
+                        f"{int(stat.get('total', 0))} — "
+                        f"{int(stat.get('percent', 0))}%",
+                        "14sp",
+                    )
+                )
+
+        questions = record.get("questions", [])
+        if not questions:
+            box.add_widget(
+                _history_label(
+                    "Для этой старой записи подробные ответы "
+                    "не сохранялись.",
+                    "14sp",
+                    color=(.45, .40, .35, 1),
+                )
+            )
+            return
+
+        box.add_widget(
+            _history_label(
+                "Ответы по вопросам",
+                "17sp",
+                bold=True,
+            )
+        )
+
+        for item in questions:
+            number = int(item.get("number", 0))
+            question_text = str(item.get("question", "")).strip()
+            source_name = str(item.get("source_name", "")).strip()
+            user_answer = str(item.get("user_answer", "")).strip() or "Нет ответа"
+            correct_answer = str(item.get("correct_answer", "")).strip()
+            correct = bool(item.get("is_correct", False))
+
+            card = ResultHistoryCard(
+                orientation="vertical",
+                size_hint_y=None,
+                height=dp(220),
+                padding=(dp(14), dp(12)),
+                spacing=dp(5),
+            )
+
+            card.add_widget(
+                _history_label(
+                    f"{number}. {question_text}",
+                    "15sp",
+                    bold=True,
+                )
+            )
+            card.add_widget(
+                _history_label(
+                    f"Источник: {source_name}",
+                    "12sp",
+                    color=(.35, .32, .28, 1),
+                )
+            )
+            card.add_widget(
+                _history_label(
+                    f"Ответ пользователя: {user_answer}",
+                    "13sp",
+                )
+            )
+            card.add_widget(
+                _history_label(
+                    f"Правильный ответ: {correct_answer}",
+                    "13sp",
+                )
+            )
+            card.add_widget(
+                _history_label(
+                    "Верно" if correct else "Неверно",
+                    "14sp",
+                    bold=True,
+                    color=(.10, .48, .18, 1)
+                    if correct
+                    else (.72, .12, .10, 1),
+                )
+            )
+
+            box.add_widget(card)
+
+    def go_back(self):
+        history = self.manager.get_screen("results_history")
+        history.load_results()
+        self.manager.current = "results_history"
 
 
 # =========================================================
 # SETTINGS
 # =========================================================
 
-class AdminSettings(Screen):
+class SettingsScreen(Screen):
     message = StringProperty("")
 
     def on_pre_enter(self, *args):
@@ -1250,7 +1389,8 @@ class TechProfiApp(App):
         manager.add_widget(Test(name="test"))
         manager.add_widget(Result(name="result"))
         manager.add_widget(ResultsHistory(name="results_history"))
-        manager.add_widget(AdminSettings(name="settings"))
+        manager.add_widget(ResultDetails(name="result_details"))
+        manager.add_widget(SettingsScreen(name="settings"))
         return manager
 
     def on_start(self):
@@ -1389,19 +1529,123 @@ class TechProfiApp(App):
         except Exception:
             return []
 
-    def save_control_result(self, user, score, total, percent, passed):
+    @staticmethod
+    def _format_duration(seconds):
+        seconds = max(0, int(seconds or 0))
+        minutes, seconds = divmod(seconds, 60)
+        hours, minutes = divmod(minutes, 60)
+
+        if hours:
+            return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+        return f"{minutes:02d}:{seconds:02d}"
+
+    @staticmethod
+    def _answer_for_result(question, answer):
+        if question.get("type", "") == "несколько":
+            values = [
+                part.strip()
+                for part in str(answer or "").split(";")
+                if part.strip()
+            ]
+            return "; ".join(values)
+
+        return str(answer or "").strip()
+
+    @staticmethod
+    def _correct_for_result(question):
+        correct = question.get("correct", [])
+
+        if isinstance(correct, list):
+            return "; ".join(str(item).strip() for item in correct)
+
+        return str(correct or "").strip()
+
+    def save_control_result(
+        self,
+        user,
+        score,
+        total,
+        percent,
+        passed,
+        questions,
+        answers,
+        duration_seconds,
+    ):
         if not self.results_path:
             self.results_path = Path(self.user_data_dir) / "results.json"
 
         records = self.load_control_results()
+        question_records = []
+        source_totals = {}
+
+        for number, (question, answer) in enumerate(
+            zip(questions, answers),
+            start=1,
+        ):
+            source_id = get_question_source_id(
+                question,
+                self.bank_name,
+            )
+            source_name = get_source_display_name(source_id)
+            correct_flag = is_correct(question, answer)
+
+            question_records.append({
+                "number": number,
+                "question": str(question.get("text", "")).strip(),
+                "type": str(question.get("type", "")).strip(),
+                "source_id": source_id,
+                "source_name": source_name,
+                "user_answer": self._answer_for_result(question, answer),
+                "correct_answer": self._correct_for_result(question),
+                "is_correct": bool(correct_flag),
+            })
+
+            if source_id not in source_totals:
+                source_totals[source_id] = {
+                    "source_id": source_id,
+                    "source_name": source_name,
+                    "correct": 0,
+                    "total": 0,
+                }
+
+            source_totals[source_id]["total"] += 1
+            if correct_flag:
+                source_totals[source_id]["correct"] += 1
+
+        source_stats = []
+        for data in source_totals.values():
+            source_total = int(data["total"])
+            source_correct = int(data["correct"])
+            source_percent = (
+                round((source_correct / source_total) * 100)
+                if source_total
+                else 0
+            )
+
+            source_stats.append({
+                **data,
+                "percent": source_percent,
+            })
+
+        source_stats.sort(
+            key=lambda item: item["source_name"].casefold()
+        )
 
         record = {
+            "id": datetime.now().strftime("%Y%m%d%H%M%S%f"),
             "user": str(user or "").strip(),
             "datetime": datetime.now().strftime("%d.%m.%Y · %H:%M"),
+            "mode": "Контрольное тестирование",
             "score": int(score),
             "total": int(total),
             "percent": int(percent),
+            "pass_percent": int(self.pass_percent),
             "status": "Пройден" if passed else "Не пройден",
+            "duration_seconds": int(duration_seconds),
+            "duration": self._format_duration(duration_seconds),
+            "selected_sources": sorted(self.selected_sources),
+            "source_stats": source_stats,
+            "questions": question_records,
         }
 
         records.insert(0, record)
