@@ -9,7 +9,7 @@ from kivy.app import App
 from kivy.clock import Clock
 from kivy.core.text import LabelBase
 from kivy.core.window import Window
-from kivy.graphics import Color, Line, Rectangle, RoundedRectangle
+from kivy.graphics import Color, Line, RoundedRectangle
 from kivy.lang import Builder
 from kivy.metrics import dp
 from kivy.properties import BooleanProperty, NumericProperty, StringProperty
@@ -20,7 +20,6 @@ from kivy.uix.checkbox import CheckBox
 from kivy.uix.label import Label
 from kivy.uix.screenmanager import Screen, ScreenManager
 from kivy.uix.textinput import TextInput
-from kivy.uix.togglebutton import ToggleButton
 
 
 # =========================================================
@@ -271,21 +270,13 @@ def get_question_source_id(question, default_bank=""):
 
 def correct_variants(value):
     """
-    Получает все допустимые варианты правильного ответа.
+    Возвращает все допустимые правильные ответы.
 
-    Поддерживаются два формата:
+    Поддерживает:
+    ["Да", "Допускается"]
 
-    1. Список:
-       ["Да", "Допускается", "Разрешается"]
-
-    2. Строка:
-       "Да;Допускается;Разрешается"
-
-    Для текстового вопроса первый элемент используется
-    как эталонный ответ для отображения пользователю.
-
-    Все остальные элементы остаются допустимыми
-    вариантами при автоматической проверке ответа.
+    и:
+    "Да;Допускается"
     """
 
     if isinstance(value, list):
@@ -301,14 +292,6 @@ def correct_variants(value):
 
 
 def canon_list(value):
-    """
-    Нормализует ответы для сравнения.
-
-    Не учитываются:
-    - регистр;
-    - пробелы в начале и конце.
-    """
-
     return {
         item.casefold()
         for item in correct_variants(value)
@@ -317,16 +300,10 @@ def canon_list(value):
 
 def display_correct_answer(question):
     """
-    Формирует правильный ответ именно для отображения.
+    Для текстового вопроса показывает только первый
+    эталонный вариант.
 
-    Текстовый вопрос:
-        отображается только первый эталонный ответ.
-
-    Вопрос с несколькими правильными вариантами:
-        отображаются все правильные варианты.
-
-    Одиночный выбор:
-        обычно содержит один правильный вариант.
+    Для остальных типов показывает все правильные ответы.
     """
 
     correct = correct_variants(
@@ -347,16 +324,6 @@ def display_correct_answer(question):
 
 
 def is_correct(question, answer):
-    """
-    Проверяет ответ пользователя.
-
-    Для типа "несколько" выбранный набор должен
-    полностью совпасть с набором правильных ответов.
-
-    Для текстового и одиночного вопроса достаточно
-    совпадения с одним допустимым вариантом correct.
-    """
-
     question_type = str(
         question.get("type", "")
     ).strip().casefold()
@@ -386,11 +353,6 @@ def is_correct(question, answer):
 # =========================================================
 
 def is_numeric_answer(question):
-    """
-    Если все допустимые правильные ответы являются числами,
-    для текстового поля можно включить цифровую клавиатуру.
-    """
-
     correct = correct_variants(
         question.get("correct", [])
     )
@@ -424,10 +386,7 @@ class AnswerRowBase(BoxLayout):
 
         with self.canvas.before:
             self.bg_color = Color(
-                .99,
-                .985,
-                .97,
-                1,
+                .99, .985, .97, 1
             )
 
             self.bg_rect = RoundedRectangle(
@@ -438,10 +397,7 @@ class AnswerRowBase(BoxLayout):
 
         with self.canvas.after:
             self.border_color = Color(
-                .82,
-                .76,
-                .68,
-                1,
+                .82, .76, .68, 1
             )
 
             self.border = Line(
@@ -467,7 +423,6 @@ class AnswerRowBase(BoxLayout):
         self._update_visual()
 
     def _update_canvas(self, *args):
-
         self.bg_rect.pos = self.pos
         self.bg_rect.size = self.size
 
@@ -481,143 +436,88 @@ class AnswerRowBase(BoxLayout):
 
     def _update_visual(self, *args):
 
-        # Правильный ответ после проверки.
         if self.status == "correct":
-
             self.bg_color.rgba = (
-                .84,
-                .95,
-                .85,
-                1,
+                .84, .95, .85, 1
             )
-
             self.border_color.rgba = (
-                .08,
-                .55,
-                .20,
-                1,
+                .08, .55, .20, 1
             )
 
             if self.checkbox is not None:
                 self.checkbox.color = (
-                    .05,
-                    .55,
-                    .18,
-                    1,
+                    .05, .55, .18, 1
                 )
 
             return
 
-        # Ошибочно выбранный ответ.
         if self.status == "wrong":
-
             self.bg_color.rgba = (
-                .98,
-                .84,
-                .84,
-                1,
+                .98, .84, .84, 1
             )
-
             self.border_color.rgba = (
-                .86,
-                .12,
-                .10,
-                1,
+                .86, .12, .10, 1
             )
 
             if self.checkbox is not None:
                 self.checkbox.color = (
-                    .90,
-                    .10,
-                    .08,
-                    1,
+                    .90, .10, .08, 1
                 )
 
             return
 
-        # Обычное состояние.
         if self.selected:
-
             self.bg_color.rgba = (
-                .91,
-                .85,
-                .77,
-                1,
+                .91, .85, .77, 1
             )
-
             self.border_color.rgba = (
-                .55,
-                .42,
-                .29,
-                1,
+                .55, .42, .29, 1
             )
 
             if self.checkbox is not None:
                 self.checkbox.color = (
-                    .48,
-                    .34,
-                    .22,
-                    1,
+                    .48, .34, .22, 1
                 )
 
         else:
-
             self.bg_color.rgba = (
-                .99,
-                .985,
-                .97,
-                1,
+                .99, .985, .97, 1
             )
-
             self.border_color.rgba = (
-                .82,
-                .76,
-                .68,
-                1,
+                .82, .76, .68, 1
             )
 
             if self.checkbox is not None:
                 self.checkbox.color = (
-                    .38,
-                    .38,
-                    .38,
-                    1,
+                    .38, .38, .38, 1
                 )
 
 
 class SingleAnswerRow(AnswerRowBase):
-    """Карточка одиночного ответа."""
 
     def on_touch_down(self, touch):
-
         if (
             self.collide_point(*touch.pos)
             and self.checkbox is not None
             and not self.checkbox.disabled
         ):
-
             self.checkbox.active = True
-
             return True
 
         return super().on_touch_down(touch)
 
 
 class MultiAnswerRow(AnswerRowBase):
-    """Карточка множественного ответа."""
 
     def on_touch_down(self, touch):
-
         if (
             self.collide_point(*touch.pos)
             and self.checkbox is not None
             and not self.checkbox.disabled
         ):
-
             self.checkbox.active = (
                 not self.checkbox.active
             )
-
             return True
 
         return super().on_touch_down(touch)
@@ -632,7 +532,6 @@ class Login(Screen):
     bank = StringProperty("")
 
     def on_pre_enter(self, *args):
-
         app = App.get_running_app()
 
         self.bank = getattr(
@@ -642,9 +541,10 @@ class Login(Screen):
         )
 
     def open_settings(self):
-
-        settings_screen = self.manager.get_screen(
-            "settings"
+        settings_screen = (
+            self.manager.get_screen(
+                "settings"
+            )
         )
 
         settings_screen.load_values()
@@ -652,25 +552,25 @@ class Login(Screen):
         self.manager.current = "settings"
 
     def open_results(self):
-
-        results_screen = self.manager.get_screen(
-            "results_history"
+        results_screen = (
+            self.manager.get_screen(
+                "results_history"
+            )
         )
 
         results_screen.load_results()
 
-        self.manager.current = "results_history"
+        self.manager.current = (
+            "results_history"
+        )
 
     def start(self, mode):
-
         name = self.ids.name.text.strip()
 
         if not name:
-
             self.ids.msg.text = (
                 "Введите фамилию и инициалы"
             )
-
             return
 
         app = App.get_running_app()
@@ -681,11 +581,9 @@ class Login(Screen):
         app.prepare_questions()
 
         if not app.questions:
-
             self.ids.msg.text = (
                 "Нет вопросов для выбранных источников"
             )
-
             return
 
         self.ids.msg.text = ""
@@ -723,7 +621,6 @@ class Test(Screen):
     btns = None
 
     def begin(self):
-
         app = App.get_running_app()
 
         self.idx = 0
@@ -744,21 +641,20 @@ class Test(Screen):
         self.result_recorded = False
 
         if self.event:
-
             self.event.cancel()
             self.event = None
 
         if app.mode == "контроль":
-
-            self.event = Clock.schedule_interval(
-                self.tick,
-                1,
+            self.event = (
+                Clock.schedule_interval(
+                    self.tick,
+                    1,
+                )
             )
 
         self.render()
 
     def tick(self, dt):
-
         app = App.get_running_app()
 
         app.seconds -= 1
@@ -772,15 +668,12 @@ class Test(Screen):
         )
 
         if app.seconds <= 0:
-
             self.finish()
-
             return False
 
         return True
 
     def get_current_answer(self):
-
         app = App.get_running_app()
 
         if not app.questions:
@@ -798,44 +691,27 @@ class Test(Screen):
             "",
         )
 
-        # -----------------------------------------------------
-        # ТЕКСТОВЫЙ
-        # -----------------------------------------------------
-
         if question_type == "текстовый":
-
             if self.input is None:
                 return ""
 
             return self.input.text.strip()
 
-        # -----------------------------------------------------
-        # ОДИН
-        # -----------------------------------------------------
-
         if question_type == "один":
-
             for option, checkbox, row in (
                 self.btns or []
             ):
-
                 if checkbox.active:
                     return option
 
             return ""
 
-        # -----------------------------------------------------
-        # НЕСКОЛЬКО
-        # -----------------------------------------------------
-
         if question_type == "несколько":
-
             selected = []
 
             for option, checkbox, row in (
                 self.btns or []
             ):
-
                 if checkbox.active:
                     selected.append(option)
 
@@ -844,23 +720,18 @@ class Test(Screen):
         return ""
 
     def save_current(self):
-
         app = App.get_running_app()
 
         answer = self.get_current_answer()
 
         if (
-            0
-            <= self.idx
-            < len(app.saved)
+            0 <= self.idx < len(app.saved)
         ):
-
             app.saved[self.idx] = answer
 
         return answer
 
     def has_answer(self):
-
         return bool(
             str(
                 self.get_current_answer()
@@ -872,6 +743,12 @@ class Test(Screen):
     # =====================================================
 
     def show_source(self):
+        """
+        Показывает только содержимое поля source.
+
+        Полное название нормативного документа
+        автоматически не добавляется.
+        """
 
         app = App.get_running_app()
 
@@ -885,19 +762,7 @@ class Test(Screen):
             "",
         )
 
-        source_id = get_question_source_id(
-            question,
-            app.bank_name,
-        )
-
-        full_document_name = (
-            get_source_display_name(
-                source_id
-            )
-        )
-
         if isinstance(source, dict):
-
             section = str(
                 source.get(
                     "section",
@@ -905,7 +770,7 @@ class Test(Screen):
                 )
             ).strip()
 
-            text = str(
+            source_text = str(
                 source.get(
                     "text",
                     "",
@@ -915,9 +780,8 @@ class Test(Screen):
             parts = [
                 part
                 for part in (
-                    full_document_name,
                     section,
-                    text,
+                    source_text,
                 )
                 if part
             ]
@@ -926,51 +790,16 @@ class Test(Screen):
                 parts
             )
 
-            return
-
-        source_text = clean_source_name(
-            source
-        )
-
-        if source_text:
-
-            if (
-                source_id
-                and source_id in source_text
-            ):
-
-                self.source = (
-                    source_text.replace(
-                        source_id,
-                        full_document_name,
-                        1,
-                    )
-                )
-
-            elif full_document_name:
-
-                self.source = (
-                    full_document_name
-                    + "\n\n"
-                    + source_text
-                )
-
-            else:
-
-                self.source = source_text
-
         else:
-
-            self.source = (
-                full_document_name
-            )
+            self.source = str(
+                source or ""
+            ).strip()
 
     # =====================================================
     # ОТОБРАЖЕНИЕ ВОПРОСА
     # =====================================================
 
     def render(self):
-
         app = App.get_running_app()
 
         if not app.questions:
@@ -1005,7 +834,6 @@ class Test(Screen):
         )
 
         if total_questions:
-
             self.progress_ratio = (
                 current_question
                 /
@@ -1017,7 +845,6 @@ class Test(Screen):
             )
 
         else:
-
             self.progress_ratio = 0.0
             self.progress_percent = "0%"
 
@@ -1026,14 +853,11 @@ class Test(Screen):
         self.answer_revealed = False
 
         if app.mode == "контроль":
-
             self.timer = (
                 f"{app.seconds // 60:02d}:"
                 f"{app.seconds % 60:02d}"
             )
-
         else:
-
             self.timer = ""
 
         answers_box = self.ids.answers
@@ -1054,12 +878,11 @@ class Test(Screen):
             else ""
         )
 
-        # -----------------------------------------------------
-        # ТЕКСТОВЫЙ ВОПРОС
-        # -----------------------------------------------------
+        # -------------------------------------------------
+        # ТЕКСТОВЫЙ
+        # -------------------------------------------------
 
         if question_type == "текстовый":
-
             keyboard_type = (
                 "number"
                 if is_numeric_answer(question)
@@ -1085,12 +908,11 @@ class Test(Screen):
                 self.input
             )
 
-        # -----------------------------------------------------
-        # ОДИН ВАРИАНТ
-        # -----------------------------------------------------
+        # -------------------------------------------------
+        # ОДИН
+        # -------------------------------------------------
 
         elif question_type == "один":
-
             group_name = (
                 f"single_answer_"
                 f"{id(self)}_"
@@ -1101,10 +923,7 @@ class Test(Screen):
                 "options",
                 [],
             ):
-
-                option_text = str(
-                    option
-                )
+                option_text = str(option)
 
                 row = SingleAnswerRow(
                     orientation="horizontal",
@@ -1119,9 +938,7 @@ class Test(Screen):
 
                 checkbox = CheckBox(
                     active=(
-                        str(
-                            saved_answer
-                        ).strip()
+                        str(saved_answer).strip()
                         ==
                         option_text
                     ),
@@ -1129,10 +946,7 @@ class Test(Screen):
                     size_hint_x=None,
                     width=dp(46),
                     color=(
-                        .38,
-                        .38,
-                        .38,
-                        1,
+                        .38, .38, .38, 1
                     ),
                 )
 
@@ -1141,10 +955,7 @@ class Test(Screen):
                     font_name="AppArial",
                     font_size="16sp",
                     color=(
-                        .08,
-                        .07,
-                        .06,
-                        1,
+                        .08, .07, .06, 1
                     ),
                     halign="left",
                     valign="middle",
@@ -1187,7 +998,6 @@ class Test(Screen):
                 row.add_widget(
                     checkbox
                 )
-
                 row.add_widget(
                     label
                 )
@@ -1204,12 +1014,11 @@ class Test(Screen):
                     )
                 )
 
-        # -----------------------------------------------------
-        # НЕСКОЛЬКО ВАРИАНТОВ
-        # -----------------------------------------------------
+        # -------------------------------------------------
+        # НЕСКОЛЬКО
+        # -------------------------------------------------
 
         elif question_type == "несколько":
-
             saved = canon_list(
                 saved_answer
             )
@@ -1218,10 +1027,7 @@ class Test(Screen):
                 "options",
                 [],
             ):
-
-                option_text = str(
-                    option
-                )
+                option_text = str(option)
 
                 row = MultiAnswerRow(
                     orientation="horizontal",
@@ -1242,10 +1048,7 @@ class Test(Screen):
                     size_hint_x=None,
                     width=dp(46),
                     color=(
-                        .38,
-                        .38,
-                        .38,
-                        1,
+                        .38, .38, .38, 1
                     ),
                 )
 
@@ -1254,10 +1057,7 @@ class Test(Screen):
                     font_name="AppArial",
                     font_size="16sp",
                     color=(
-                        .08,
-                        .07,
-                        .06,
-                        1,
+                        .08, .07, .06, 1
                     ),
                     halign="left",
                     valign="middle",
@@ -1300,7 +1100,6 @@ class Test(Screen):
                 row.add_widget(
                     checkbox
                 )
-
                 row.add_widget(
                     label
                 )
@@ -1318,7 +1117,6 @@ class Test(Screen):
                 )
 
         else:
-
             self.question = (
                 "Ошибка: неизвестный тип вопроса"
             )
@@ -1328,7 +1126,6 @@ class Test(Screen):
         row,
         value,
     ):
-
         row.selected = value
 
     def _multiple_checkbox_changed(
@@ -1336,7 +1133,6 @@ class Test(Screen):
         row,
         value,
     ):
-
         row.selected = value
 
     def _resize_answer_label(
@@ -1344,7 +1140,6 @@ class Test(Screen):
         label,
         width,
     ):
-
         label.text_size = (
             width,
             None,
@@ -1356,7 +1151,6 @@ class Test(Screen):
         texture_size,
         row,
     ):
-
         label.height = max(
             dp(48),
             texture_size[1] + dp(16),
@@ -1373,18 +1167,15 @@ class Test(Screen):
     # =====================================================
 
     def next(self):
-
         app = App.get_running_app()
 
         if not app.questions:
             return
 
         if not self.has_answer():
-
             self.message = (
                 "Сначала выберите или введите ответ"
             )
-
             return
 
         self.message = ""
@@ -1396,9 +1187,7 @@ class Test(Screen):
             >=
             len(app.questions) - 1
         ):
-
             self.finish()
-
             return
 
         self.idx += 1
@@ -1406,7 +1195,6 @@ class Test(Screen):
         self.render()
 
     def prev(self):
-
         app = App.get_running_app()
 
         if not app.questions:
@@ -1417,9 +1205,7 @@ class Test(Screen):
         self.message = ""
 
         if self.idx > 0:
-
             self.idx -= 1
-
             self.render()
 
     # =====================================================
@@ -1427,22 +1213,18 @@ class Test(Screen):
     # =====================================================
 
     def show_correct(self):
-
         app = App.get_running_app()
 
         if not app.questions:
             return
 
-        # Кнопка используется только в обучении.
         if app.mode != "обучение":
             return
 
         if not self.has_answer():
-
             self.message = (
                 "Сначала выберите или введите ответ"
             )
-
             return
 
         self.message = ""
@@ -1463,15 +1245,14 @@ class Test(Screen):
             [],
         )
 
-        # -----------------------------------------------------
+        # -------------------------------------------------
         # ОДИН / НЕСКОЛЬКО
-        # -----------------------------------------------------
+        # -------------------------------------------------
 
         if question_type in (
             "один",
             "несколько",
         ):
-
             correct_values = canon_list(
                 correct
             )
@@ -1492,27 +1273,21 @@ class Test(Screen):
                     option_key
                     in correct_values
                 ):
-
                     row.status = "correct"
 
                 elif checkbox.active:
-
                     row.status = "wrong"
 
                 else:
-
                     row.status = "normal"
 
                 checkbox.disabled = True
 
-        # -----------------------------------------------------
+        # -------------------------------------------------
         # ТЕКСТОВЫЙ
-        # -----------------------------------------------------
+        # -------------------------------------------------
 
         else:
-
-            # Для текстового вопроса выводим
-            # только первый эталонный вариант.
             correct_text = (
                 display_correct_answer(
                     question
@@ -1520,22 +1295,19 @@ class Test(Screen):
             )
 
             if correct_text:
-
                 self.message = (
                     "Правильный ответ: "
                     + correct_text
                 )
-
             else:
-
                 self.message = (
                     "Правильный ответ не указан"
                 )
 
             if self.input is not None:
-
                 self.input.disabled = True
 
+        # Показываем ровно поле source.
         self.show_source()
 
     # =====================================================
@@ -1543,17 +1315,14 @@ class Test(Screen):
     # =====================================================
 
     def finish(self):
-
         app = App.get_running_app()
 
         try:
             self.save_current()
-
         except Exception:
             pass
 
         if self.event:
-
             self.event.cancel()
             self.event = None
 
@@ -1563,12 +1332,10 @@ class Test(Screen):
             app.questions,
             app.saved,
         ):
-
             if is_correct(
                 question,
                 answer,
             ):
-
                 score += 1
 
         total = len(
@@ -1605,7 +1372,6 @@ class Test(Screen):
             app.mode == "контроль"
             and not self.result_recorded
         ):
-
             configured_seconds = (
                 int(app.test_minutes)
                 *
@@ -1671,13 +1437,8 @@ class Result(Screen):
 
 
 class ResultHistoryCard(BoxLayout):
-    """
-    Карточка результата с автоматической
-    высотой по содержимому.
-    """
 
     def __init__(self, **kwargs):
-
         kwargs.setdefault(
             "orientation",
             "vertical",
@@ -1696,31 +1457,19 @@ class ResultHistoryCard(BoxLayout):
         )
 
         with self.canvas.before:
-
             self.card_color = Color(
-                .99,
-                .98,
-                .96,
-                1,
+                .99, .98, .96, 1
             )
 
-            self.card_rect = (
-                RoundedRectangle(
-                    pos=self.pos,
-                    size=self.size,
-                    radius=[dp(12)],
-                )
+            self.card_rect = RoundedRectangle(
+                pos=self.pos,
+                size=self.size,
+                radius=[dp(12)],
             )
 
         with self.canvas.after:
-
-            self.card_border_color = (
-                Color(
-                    .84,
-                    .78,
-                    .70,
-                    1,
-                )
+            self.card_border_color = Color(
+                .84, .78, .70, 1
             )
 
             self.card_border = Line(
@@ -1744,21 +1493,14 @@ class ResultHistoryCard(BoxLayout):
         _instance,
         minimum_height,
     ):
-
         self.height = max(
             dp(70),
             minimum_height,
         )
 
     def _update_canvas(self, *args):
-
-        self.card_rect.pos = (
-            self.pos
-        )
-
-        self.card_rect.size = (
-            self.size
-        )
+        self.card_rect.pos = self.pos
+        self.card_rect.size = self.size
 
         self.card_border.rounded_rectangle = (
             self.x,
@@ -1775,7 +1517,6 @@ def _history_label(
     bold=False,
     color=None,
 ):
-
     label = Label(
         text=str(text),
         font_name="AppArial",
@@ -1796,7 +1537,6 @@ def _history_label(
         instance,
         width,
     ):
-
         instance.text_size = (
             max(
                 dp(60),
@@ -1809,7 +1549,6 @@ def _history_label(
         instance,
         texture_size,
     ):
-
         instance.height = max(
             dp(24),
             texture_size[1]
@@ -1841,7 +1580,6 @@ def _history_label(
 class ResultsHistory(Screen):
 
     def on_pre_enter(self, *args):
-
         self.load_results()
 
     def load_results(self):
@@ -1850,7 +1588,6 @@ class ResultsHistory(Screen):
             "results_box"
             not in self.ids
         ):
-
             return
 
         app = App.get_running_app()
@@ -1864,7 +1601,6 @@ class ResultsHistory(Screen):
         )
 
         if not records:
-
             empty = Label(
                 text=(
                     "Пока нет результатов "
@@ -1873,10 +1609,7 @@ class ResultsHistory(Screen):
                 font_name="AppArial",
                 font_size="16sp",
                 color=(
-                    .35,
-                    .32,
-                    .28,
-                    1,
+                    .35, .32, .28, 1
                 ),
                 size_hint_y=None,
                 height=dp(90),
@@ -1903,7 +1636,6 @@ class ResultsHistory(Screen):
         for index, record in enumerate(
             records
         ):
-
             user = str(
                 record.get(
                     "user",
@@ -1980,10 +1712,7 @@ class ResultsHistory(Screen):
                     date_time,
                     "13sp",
                     color=(
-                        .25,
-                        .22,
-                        .19,
-                        1,
+                        .25, .22, .19, 1
                     ),
                 )
             )
@@ -2024,7 +1753,6 @@ class ResultsHistory(Screen):
             )
 
             if duration:
-
                 card.add_widget(
                     _history_label(
                         (
@@ -2033,16 +1761,12 @@ class ResultsHistory(Screen):
                         ),
                         "13sp",
                         color=(
-                            .35,
-                            .32,
-                            .28,
-                            1,
+                            .35, .32, .28, 1
                         ),
                     )
                 )
 
             if details:
-
                 card.add_widget(
                     _history_label(
                         (
@@ -2051,10 +1775,7 @@ class ResultsHistory(Screen):
                         ),
                         "13sp",
                         color=(
-                            .35,
-                            .32,
-                            .28,
-                            1,
+                            .35, .32, .28, 1
                         ),
                     )
                 )
@@ -2064,18 +1785,12 @@ class ResultsHistory(Screen):
                 font_name="AppArial",
                 font_size="14sp",
                 color=(
-                    1,
-                    .98,
-                    .95,
-                    1,
+                    1, .98, .95, 1
                 ),
                 background_normal="",
                 background_down="",
                 background_color=(
-                    .48,
-                    .36,
-                    .25,
-                    1,
+                    .48, .36, .25, 1
                 ),
                 size_hint_y=None,
                 height=dp(42),
@@ -2099,7 +1814,6 @@ class ResultsHistory(Screen):
         self,
         index,
     ):
-
         details_screen = (
             self.manager.get_screen(
                 "result_details"
@@ -2115,7 +1829,6 @@ class ResultsHistory(Screen):
         )
 
     def go_back(self):
-
         self.manager.current = (
             "login"
         )
@@ -2133,7 +1846,6 @@ class ResultDetails(Screen):
         self,
         index,
     ):
-
         app = App.get_running_app()
 
         records = (
@@ -2147,11 +1859,9 @@ class ResultDetails(Screen):
         if not (
             0 <= index < len(records)
         ):
-
             self.summary_text = (
                 "Запись не найдена"
             )
-
             return
 
         record = records[index]
@@ -2224,14 +1934,12 @@ class ResultDetails(Screen):
         ]
 
         if pass_percent:
-
             lines.append(
                 f"Проходной порог: "
                 f"{pass_percent}%"
             )
 
         if duration:
-
             lines.append(
                 "Время прохождения: "
                 + duration
@@ -2240,10 +1948,6 @@ class ResultDetails(Screen):
         self.summary_text = (
             "\n".join(lines)
         )
-
-        # =====================================================
-        # ОТВЕТЫ ПО ВОПРОСАМ
-        # =====================================================
 
         questions = record.get(
             "questions",
@@ -2263,7 +1967,6 @@ class ResultDetails(Screen):
         )
 
         if questions:
-
             box.add_widget(
                 _history_label(
                     "Ответы по вопросам",
@@ -2377,7 +2080,6 @@ class ResultDetails(Screen):
                 )
 
                 if source_name:
-
                     card.add_widget(
                         _history_label(
                             (
@@ -2386,10 +2088,7 @@ class ResultDetails(Screen):
                             ),
                             "12sp",
                             color=(
-                                .35,
-                                .32,
-                                .28,
-                                1,
+                                .35, .32, .28, 1
                             ),
                         )
                     )
@@ -2399,7 +2098,6 @@ class ResultDetails(Screen):
                 )
 
         else:
-
             box.add_widget(
                 _history_label(
                     (
@@ -2409,17 +2107,10 @@ class ResultDetails(Screen):
                     ),
                     "14sp",
                     color=(
-                        .45,
-                        .40,
-                        .35,
-                        1,
+                        .45, .40, .35, 1
                     ),
                 )
             )
-
-        # =====================================================
-        # СТАТИСТИКА ПО НОРМАТИВНЫМ ДОКУМЕНТАМ
-        # =====================================================
 
         source_stats = record.get(
             "source_stats",
@@ -2438,7 +2129,6 @@ class ResultDetails(Screen):
         )
 
         if source_stats:
-
             box.add_widget(
                 _history_label(
                     (
@@ -2451,7 +2141,6 @@ class ResultDetails(Screen):
             )
 
             for stat in source_stats:
-
                 source_name = str(
                     stat.get(
                         "source_name",
@@ -2508,10 +2197,7 @@ class ResultDetails(Screen):
                         ),
                         "13sp",
                         color=(
-                            .35,
-                            .32,
-                            .28,
-                            1,
+                            .35, .32, .28, 1
                         ),
                     )
                 )
@@ -2521,7 +2207,6 @@ class ResultDetails(Screen):
                 )
 
     def go_back(self):
-
         history = (
             self.manager.get_screen(
                 "results_history"
@@ -2544,11 +2229,9 @@ class SettingsScreen(Screen):
     message = StringProperty("")
 
     def on_pre_enter(self, *args):
-
         self.load_values()
 
     def load_values(self):
-
         self.message = ""
 
         app = App.get_running_app()
@@ -2557,7 +2240,6 @@ class SettingsScreen(Screen):
             "question_count"
             in self.ids
         ):
-
             self.ids.question_count.text = (
                 str(
                     int(
@@ -2570,7 +2252,6 @@ class SettingsScreen(Screen):
             "test_minutes"
             in self.ids
         ):
-
             self.ids.test_minutes.text = (
                 str(
                     int(
@@ -2583,7 +2264,6 @@ class SettingsScreen(Screen):
             "pass_percent"
             in self.ids
         ):
-
             self.ids.pass_percent.text = (
                 str(
                     int(
@@ -2601,12 +2281,10 @@ class SettingsScreen(Screen):
         self,
         *args,
     ):
-
         if (
             "sources_box"
             not in self.ids
         ):
-
             return
 
         app = App.get_running_app()
@@ -2618,7 +2296,6 @@ class SettingsScreen(Screen):
         for source in (
             app.source_catalog
         ):
-
             source_id = source["id"]
             source_name = source["name"]
 
@@ -2642,10 +2319,7 @@ class SettingsScreen(Screen):
                 size_hint_x=None,
                 width=dp(42),
                 color=(
-                    .20,
-                    .16,
-                    .12,
-                    1,
+                    .20, .16, .12, 1
                 ),
             )
 
@@ -2654,10 +2328,7 @@ class SettingsScreen(Screen):
                 font_name="Roboto",
                 font_size="14sp",
                 color=(
-                    .08,
-                    .07,
-                    .06,
-                    1,
+                    .08, .07, .06, 1
                 ),
                 halign="left",
                 valign="middle",
@@ -2696,7 +2367,6 @@ class SettingsScreen(Screen):
         label,
         size,
     ):
-
         label.text_size = (
             size[0],
             None,
@@ -2707,17 +2377,13 @@ class SettingsScreen(Screen):
         source_id,
         active,
     ):
-
         app = App.get_running_app()
 
         if active:
-
             app.selected_sources.add(
                 source_id
             )
-
         else:
-
             app.selected_sources.discard(
                 source_id
             )
@@ -2727,12 +2393,10 @@ class SettingsScreen(Screen):
     def update_select_all_checkbox(
         self,
     ):
-
         if (
             "all_sources"
             not in self.ids
         ):
-
             return
 
         app = App.get_running_app()
@@ -2758,7 +2422,6 @@ class SettingsScreen(Screen):
             !=
             all_selected
         ):
-
             checkbox.active = (
                 all_selected
             )
@@ -2767,17 +2430,13 @@ class SettingsScreen(Screen):
         self,
         active,
     ):
-
         app = App.get_running_app()
 
         if active:
-
             app.selected_sources = set(
                 app.available_sources
             )
-
         else:
-
             app.selected_sources = set()
 
         self.build_source_rows()
@@ -2788,20 +2447,16 @@ class SettingsScreen(Screen):
         test_minutes=None,
         pass_percent=None,
     ):
-
         app = App.get_running_app()
 
         if not app.selected_sources:
-
             self.message = (
                 "Выберите хотя бы один "
                 "источник вопросов"
             )
-
             return False
 
         try:
-
             question_count = int(
                 question_count
             )
@@ -2831,11 +2486,9 @@ class SettingsScreen(Screen):
             TypeError,
             ValueError,
         ):
-
             self.message = (
                 "Проверьте значения настроек"
             )
-
             return False
 
         app.question_count = (
@@ -2851,11 +2504,9 @@ class SettingsScreen(Screen):
         )
 
         if app.save_user_settings():
-
             self.message = (
                 "Настройки сохранены"
             )
-
             return True
 
         self.message = (
@@ -2865,7 +2516,6 @@ class SettingsScreen(Screen):
         return False
 
     def go_back(self):
-
         self.manager.current = (
             "login"
         )
@@ -2897,7 +2547,6 @@ class TechProfiApp(App):
         self,
         **kwargs,
     ):
-
         super().__init__(
             **kwargs
         )
@@ -2919,7 +2568,6 @@ class TechProfiApp(App):
         self.results_path = None
 
     def build(self):
-
         self.bank_name, self.pool = (
             load_bank()
         )
@@ -2927,11 +2575,9 @@ class TechProfiApp(App):
         self.collect_sources()
 
         try:
-
             Window.softinput_mode = (
                 "below_target"
             )
-
         except Exception:
             pass
 
@@ -2980,7 +2626,6 @@ class TechProfiApp(App):
         return manager
 
     def on_start(self):
-
         self.settings_path = (
             Path(self.user_data_dir)
             /
@@ -2999,7 +2644,6 @@ class TechProfiApp(App):
             return
 
         try:
-
             login = (
                 self.root.get_screen(
                     "login"
@@ -3018,11 +2662,9 @@ class TechProfiApp(App):
     # =====================================================
 
     def collect_sources(self):
-
         catalog_by_id = {}
 
         for question in self.pool:
-
             source_id = (
                 get_question_source_id(
                     question,
@@ -3037,7 +2679,6 @@ class TechProfiApp(App):
                 source_id
                 not in catalog_by_id
             ):
-
                 catalog_by_id[
                     source_id
                 ] = {
@@ -3050,15 +2691,12 @@ class TechProfiApp(App):
                 }
 
         if catalog_by_id:
-
             self.source_catalog = sorted(
                 catalog_by_id.values(),
                 key=lambda item:
                 item["name"].casefold(),
             )
-
         else:
-
             self.source_catalog = (
                 discover_dat_sources()
             )
@@ -3079,7 +2717,6 @@ class TechProfiApp(App):
     # =====================================================
 
     def load_user_settings(self):
-
         self.question_count = (
             DEFAULT_NUM
         )
@@ -3099,18 +2736,14 @@ class TechProfiApp(App):
         if not self.settings_path:
             return
 
-        if (
-            not self.settings_path.exists()
-        ):
+        if not self.settings_path.exists():
             return
 
         try:
-
             with self.settings_path.open(
                 "r",
                 encoding="utf-8",
             ) as file:
-
                 data = json.load(
                     file
                 )
@@ -3187,7 +2820,6 @@ class TechProfiApp(App):
                 and
                 not saved_sources
             ):
-
                 selected = set(
                     current_sources
                 )
@@ -3197,7 +2829,6 @@ class TechProfiApp(App):
             )
 
         except Exception:
-
             self.question_count = (
                 DEFAULT_NUM
             )
@@ -3215,9 +2846,7 @@ class TechProfiApp(App):
             )
 
     def save_user_settings(self):
-
         if not self.settings_path:
-
             self.settings_path = (
                 Path(
                     self.user_data_dir
@@ -3254,7 +2883,6 @@ class TechProfiApp(App):
         }
 
         try:
-
             self.settings_path.parent.mkdir(
                 parents=True,
                 exist_ok=True,
@@ -3264,7 +2892,6 @@ class TechProfiApp(App):
                 "w",
                 encoding="utf-8",
             ) as file:
-
                 json.dump(
                     data,
                     file,
@@ -3275,7 +2902,6 @@ class TechProfiApp(App):
             return True
 
         except Exception:
-
             return False
 
     # =====================================================
@@ -3283,9 +2909,7 @@ class TechProfiApp(App):
     # =====================================================
 
     def load_control_results(self):
-
         if not self.results_path:
-
             self.results_path = (
                 Path(
                     self.user_data_dir
@@ -3294,19 +2918,14 @@ class TechProfiApp(App):
                 "results.json"
             )
 
-        if (
-            not self.results_path.exists()
-        ):
-
+        if not self.results_path.exists():
             return []
 
         try:
-
             with self.results_path.open(
                 "r",
                 encoding="utf-8",
             ) as file:
-
                 data = json.load(
                     file
                 )
@@ -3321,14 +2940,12 @@ class TechProfiApp(App):
             )
 
         except Exception:
-
             return []
 
     @staticmethod
     def _format_duration(
         seconds,
     ):
-
         seconds = max(
             0,
             int(
@@ -3347,7 +2964,6 @@ class TechProfiApp(App):
         )
 
         if hours:
-
             return (
                 f"{hours:02d}:"
                 f"{minutes:02d}:"
@@ -3364,7 +2980,6 @@ class TechProfiApp(App):
         question,
         answer,
     ):
-
         if (
             question.get(
                 "type",
@@ -3373,7 +2988,6 @@ class TechProfiApp(App):
             ==
             "несколько"
         ):
-
             values = [
                 part.strip()
                 for part
@@ -3395,13 +3009,8 @@ class TechProfiApp(App):
     def _correct_for_result(
         question,
     ):
-        """
-        В историю сохраняется только тот правильный ответ,
-        который должен видеть пользователь.
-
-        Для текстового вопроса это первый эталонный вариант.
-        """
-
+        # Для текстового вопроса возвращается
+        # только первый эталонный вариант.
         return display_correct_answer(
             question
         )
@@ -3417,9 +3026,7 @@ class TechProfiApp(App):
         answers,
         duration_seconds,
     ):
-
         if not self.results_path:
-
             self.results_path = (
                 Path(
                     self.user_data_dir
@@ -3445,7 +3052,6 @@ class TechProfiApp(App):
             ),
             start=1,
         ):
-
             source_id = (
                 get_question_source_id(
                     question,
@@ -3511,7 +3117,6 @@ class TechProfiApp(App):
                 source_id
                 not in source_totals
             ):
-
                 source_totals[
                     source_id
                 ] = {
@@ -3533,7 +3138,6 @@ class TechProfiApp(App):
             ]["total"] += 1
 
             if correct_flag:
-
                 source_totals[
                     source_id
                 ]["correct"] += 1
@@ -3543,7 +3147,6 @@ class TechProfiApp(App):
         for data in (
             source_totals.values()
         ):
-
             source_total = int(
                 data["total"]
             )
@@ -3648,7 +3251,6 @@ class TechProfiApp(App):
         )
 
         try:
-
             self.results_path.parent.mkdir(
                 parents=True,
                 exist_ok=True,
@@ -3664,7 +3266,6 @@ class TechProfiApp(App):
                 "w",
                 encoding="utf-8",
             ) as file:
-
                 json.dump(
                     records,
                     file,
@@ -3679,7 +3280,6 @@ class TechProfiApp(App):
             return True
 
         except Exception:
-
             return False
 
     # =====================================================
@@ -3687,11 +3287,9 @@ class TechProfiApp(App):
     # =====================================================
 
     def prepare_questions(self):
-
         filtered = []
 
         for question in self.pool:
-
             source_id = (
                 get_question_source_id(
                     question,
@@ -3703,7 +3301,6 @@ class TechProfiApp(App):
                 source_id
                 in self.selected_sources
             ):
-
                 filtered.append(
                     question
                 )
@@ -3713,7 +3310,6 @@ class TechProfiApp(App):
         )
 
         if self.mode == "контроль":
-
             count = min(
                 int(
                     self.question_count
@@ -3726,7 +3322,6 @@ class TechProfiApp(App):
             )
 
         else:
-
             self.questions = filtered
 
 
