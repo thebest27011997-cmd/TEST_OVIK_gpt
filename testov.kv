@@ -200,7 +200,7 @@
                 spacing: dp(8)
 
                 Label:
-                    text: 'Контрольное\\nтестирование' if app.mode == 'контроль' else 'Обучение'
+                    text: 'Контрольное\nтестирование' if app.mode == 'контроль' else 'Обучение'
                     color: .08, .07, .06, 1
                     font_size: '17sp'
                     bold: True
@@ -287,13 +287,7 @@
                         Color:
                             rgba: .55, .43, .31, 1
                         Line:
-                            rounded_rectangle: (
-                                self.x,
-                                self.y,
-                                self.width,
-                                self.height,
-                                dp(12)
-                            )
+                            rounded_rectangle: (self.x, self.y, self.width, self.height, dp(12))
                             width: 1.2
 
                     Widget:
@@ -305,29 +299,15 @@
                                 rgba: .12, .105, .09, 1
 
                             Line:
-                                circle: (
-                                    self.center_x,
-                                    self.center_y,
-                                    dp(15)
-                                )
+                                circle: (self.center_x, self.center_y, dp(15))
                                 width: 1.5
 
                             Line:
-                                points: (
-                                    self.center_x,
-                                    self.center_y,
-                                    self.center_x,
-                                    self.center_y + dp(9)
-                                )
+                                points: (self.center_x, self.center_y, self.center_x, self.center_y + dp(9))
                                 width: 1.6
 
                             Line:
-                                points: (
-                                    self.center_x,
-                                    self.center_y,
-                                    self.center_x - dp(6),
-                                    self.center_y - dp(4)
-                                )
+                                points: (self.center_x, self.center_y, self.center_x - dp(6), self.center_y - dp(4))
                                 width: 1.6
 
                     Label:
