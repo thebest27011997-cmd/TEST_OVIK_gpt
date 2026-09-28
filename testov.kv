@@ -98,7 +98,7 @@
                 color: .75, .10, .10, 1
                 font_size: '14sp'
                 size_hint_y: None
-                height: dp(30) if self.text else 0.01
+                height: dp(30) if self.text else 0
                 text_size: self.width, None
                 halign: 'center'
                 valign: 'middle'
@@ -170,11 +170,15 @@
         padding: dp(14), dp(52), dp(14), dp(58)
         spacing: dp(10)
 
-        # Верхняя область
+        # =================================================
+        # ВЕРХНЯЯ ОБЛАСТЬ
+        # Высота рассчитывается автоматически.
+        # =================================================
+
         BoxLayout:
             orientation: 'vertical'
             size_hint_y: None
-            height: dp(188) if app.mode == 'контроль' else dp(82)
+            height: self.minimum_height
             padding: dp(16), dp(14)
             spacing: dp(8)
 
@@ -186,13 +190,17 @@
                     size: self.size
                     radius: [dp(14)]
 
+            # ---------------------------------------------
+            # Режим + номер вопроса
+            # ---------------------------------------------
+
             BoxLayout:
                 size_hint_y: None
-                height: dp(38)
+                height: dp(42)
                 spacing: dp(8)
 
                 Label:
-                    text: 'Контрольное\nтестирование' if app.mode == 'контроль' else 'Обучение'
+                    text: 'Контрольное\\nтестирование' if app.mode == 'контроль' else 'Обучение'
                     color: .08, .07, .06, 1
                     font_size: '17sp'
                     bold: True
@@ -207,6 +215,10 @@
                     halign: 'right'
                     valign: 'middle'
                     text_size: self.size
+
+            # ---------------------------------------------
+            # Прогресс
+            # ---------------------------------------------
 
             BoxLayout:
                 size_hint_y: None
@@ -227,21 +239,29 @@
                         size: self.width * root.progress_ratio, self.height
                         radius: [dp(5)]
 
+            # ---------------------------------------------
+            # Процент выполнения
+            # ---------------------------------------------
+
             Label:
                 text: root.progress_percent
                 color: .28, .23, .19, 1
                 font_size: '13sp'
                 size_hint_y: None
-                height: dp(18)
+                height: dp(20)
                 halign: 'right'
                 valign: 'middle'
                 text_size: self.size
 
-            # Таймер только в режиме "Контрольное тестирование"
+            # ---------------------------------------------
+            # Таймер
+            # Показывается только в контрольном режиме.
+            # ---------------------------------------------
+
             BoxLayout:
                 orientation: 'vertical'
                 size_hint_y: None
-                height: dp(104) if app.mode == 'контроль' else 0.01
+                height: dp(104) if app.mode == 'контроль' else 0
                 opacity: 1 if app.mode == 'контроль' else 0
                 disabled: app.mode != 'контроль'
                 spacing: dp(3)
@@ -267,7 +287,13 @@
                         Color:
                             rgba: .55, .43, .31, 1
                         Line:
-                            rounded_rectangle: (self.x, self.y, self.width, self.height, dp(12))
+                            rounded_rectangle: (
+                                self.x,
+                                self.y,
+                                self.width,
+                                self.height,
+                                dp(12)
+                            )
                             width: 1.2
 
                     Widget:
@@ -277,14 +303,31 @@
                         canvas:
                             Color:
                                 rgba: .12, .105, .09, 1
+
                             Line:
-                                circle: (self.center_x, self.center_y, dp(15))
+                                circle: (
+                                    self.center_x,
+                                    self.center_y,
+                                    dp(15)
+                                )
                                 width: 1.5
+
                             Line:
-                                points: (self.center_x, self.center_y, self.center_x, self.center_y + dp(9))
+                                points: (
+                                    self.center_x,
+                                    self.center_y,
+                                    self.center_x,
+                                    self.center_y + dp(9)
+                                )
                                 width: 1.6
+
                             Line:
-                                points: (self.center_x, self.center_y, self.center_x - dp(6), self.center_y - dp(4))
+                                points: (
+                                    self.center_x,
+                                    self.center_y,
+                                    self.center_x - dp(6),
+                                    self.center_y - dp(4)
+                                )
                                 width: 1.6
 
                     Label:
@@ -301,12 +344,16 @@
                     color: .35, .29, .24, 1
                     font_size: '13sp'
                     size_hint_y: None
-                    height: dp(20)
+                    height: dp(20) if app.mode == 'контроль' else 0
                     halign: 'center'
                     valign: 'middle'
                     text_size: self.size
 
-        # Прокручиваются только вопрос, ответы и источник
+        # =================================================
+        # ПРОКРУЧИВАЕМАЯ ОБЛАСТЬ
+        # Вопрос, ответы, правильный ответ и источник.
+        # =================================================
+
         ScrollView:
             id: question_scroll
             do_scroll_x: False
@@ -318,6 +365,10 @@
                 height: self.minimum_height
                 spacing: dp(12)
                 padding: dp(2), dp(4), dp(2), dp(16)
+
+                # -----------------------------------------
+                # Вопрос
+                # -----------------------------------------
 
                 BoxLayout:
                     orientation: 'vertical'
@@ -345,6 +396,10 @@
                         halign: 'left'
                         valign: 'middle'
 
+                # -----------------------------------------
+                # Ответы
+                # -----------------------------------------
+
                 BoxLayout:
                     id: answers
                     orientation: 'vertical'
@@ -352,21 +407,28 @@
                     height: self.minimum_height
                     spacing: dp(10)
 
+                # -----------------------------------------
+                # Сообщение / правильный ответ
+                # -----------------------------------------
+
                 Label:
                     text: root.message
                     color: .65, .15, .10, 1
                     font_size: '15sp'
                     text_size: self.width - dp(8), None
                     size_hint_y: None
-                    height: self.texture_size[1] + dp(14) if root.message else 0.01
+                    height: self.texture_size[1] + dp(14) if root.message else 0
                     halign: 'left'
                     valign: 'middle'
 
-                # Источник появляется после нажатия "Ответ" в обучении
+                # -----------------------------------------
+                # Источник
+                # -----------------------------------------
+
                 BoxLayout:
                     orientation: 'vertical'
                     size_hint_y: None
-                    height: self.minimum_height if root.source else 0.01
+                    height: self.minimum_height if root.source else 0
                     opacity: 1 if root.source else 0
                     padding: dp(16), dp(14)
                     spacing: dp(8)
@@ -385,17 +447,18 @@
                         font_size: '16sp'
                         bold: True
                         size_hint_y: None
-                        height: self.texture_size[1] + dp(4) if root.source else 0.01
+                        height: self.texture_size[1] + dp(4) if root.source else 0
                         text_size: self.width, None
                         halign: 'left'
                         valign: 'middle'
 
                     Label:
                         text: root.source
+                        font_name: 'Roboto'
                         color: .16, .15, .14, 1
                         font_size: '14sp'
                         size_hint_y: None
-                        height: self.texture_size[1] + dp(6) if root.source else 0.01
+                        height: self.texture_size[1] + dp(6) if root.source else 0
                         text_size: self.width, None
                         halign: 'left'
                         valign: 'top'
@@ -404,11 +467,15 @@
                     size_hint_y: None
                     height: dp(10)
 
-        # Фиксированная нижняя область
+        # =================================================
+        # НИЖНЯЯ ОБЛАСТЬ
+        # Высота также рассчитывается автоматически.
+        # =================================================
+
         BoxLayout:
             orientation: 'vertical'
             size_hint_y: None
-            height: dp(174) if app.mode == 'обучение' else dp(108)
+            height: self.minimum_height
             spacing: dp(8)
             padding: 0, dp(4), 0, 0
 
@@ -419,7 +486,10 @@
                     pos: self.pos
                     size: self.size
 
-            # Ответ фиксирован вместе с нижними кнопками
+            # ---------------------------------------------
+            # Ответ
+            # ---------------------------------------------
+
             Button:
                 text: 'Ответ'
                 color: 1, .98, .95, 1
@@ -429,10 +499,14 @@
                 background_down: ''
                 background_color: .48, .36, .25, 1
                 size_hint_y: None
-                height: dp(50) if app.mode == 'обучение' else 0.01
+                height: dp(50) if app.mode == 'обучение' else 0
                 opacity: 1 if app.mode == 'обучение' else 0
                 disabled: app.mode != 'обучение'
                 on_release: root.show_correct()
+
+            # ---------------------------------------------
+            # Завершение тестирования
+            # ---------------------------------------------
 
             Button:
                 text: 'Завершить тестирование'
@@ -444,6 +518,10 @@
                 size_hint_y: None
                 height: dp(46)
                 on_release: root.finish()
+
+            # ---------------------------------------------
+            # Навигация
+            # ---------------------------------------------
 
             BoxLayout:
                 size_hint_y: None
@@ -511,7 +589,6 @@
             on_release: app.root.current = 'login'
 
         Widget:
-
 
 
 # =========================================================
@@ -885,7 +962,7 @@
                     color: (.12, .48, .18, 1) if root.message == 'Настройки сохранены' else (.70, .12, .10, 1)
                     font_size: '14sp'
                     size_hint_y: None
-                    height: self.texture_size[1] + dp(10) if root.message else 0.01
+                    height: self.texture_size[1] + dp(10) if root.message else 0
                     text_size: self.width, None
                     halign: 'center'
                     valign: 'middle'
