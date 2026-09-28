@@ -12,6 +12,7 @@ jobs:
 
     env:
       BUILDOZER_WARN_ON_ROOT: "0"
+      URL_setuptools: "https://files.pythonhosted.org/packages/96/66/1138b7ec901e86139c07900ce906c2f1e5c3400ee1cfd1e7ab3c776248c9/setuptools-51.3.3.tar.gz"
 
     steps:
       # ============================================================
@@ -30,6 +31,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
 
       # ============================================================
       # 3. JAVA
@@ -117,36 +119,26 @@ jobs:
           new_lines = []
 
           for line in text.splitlines():
-
               stripped = line.strip()
 
-              if stripped.startswith(
-                  "p4a.branch"
-              ):
+              if stripped.startswith("p4a.branch"):
                   continue
 
-              if stripped.startswith(
-                  "android.sdk_path"
-              ):
+              if stripped.startswith("android.sdk_path"):
                   continue
 
-              if stripped.startswith(
-                  "android.ndk_path"
-              ):
+              if stripped.startswith("android.ndk_path"):
                   continue
 
               new_lines.append(line)
 
-          text = "\n".join(
-              new_lines
-          ) + "\n"
+          text = "\n".join(new_lines) + "\n"
 
           marker = "[buildozer]"
 
           if marker not in text:
               raise RuntimeError(
-                  "Section [buildozer] "
-                  "not found in buildozer.spec"
+                  "Section [buildozer] not found in buildozer.spec"
               )
 
           text = text.replace(
@@ -164,18 +156,14 @@ jobs:
               encoding="utf-8"
           )
 
-          print(
-              "buildozer.spec updated"
-          )
+          print("buildozer.spec updated")
           PY
 
           echo "================================"
           echo "P4A CONFIGURATION"
           echo "================================"
 
-          grep -n \
-            "p4a.branch" \
-            buildozer.spec
+          grep -n "p4a.branch" buildozer.spec
 
 
       # ============================================================
@@ -187,11 +175,8 @@ jobs:
           set -euxo pipefail
 
           SDK_DIR="$HOME/.buildozer/android/platform/android-sdk"
-
           ZIP_FILE="$RUNNER_TEMP/android-command-line-tools.zip"
-
           TEMP_DIR="$RUNNER_TEMP/android-command-line-tools"
-
           SDKMANAGER="$SDK_DIR/cmdline-tools/latest/bin/sdkmanager"
 
           echo "================================"
@@ -201,59 +186,23 @@ jobs:
           rm -rf "$SDK_DIR"
           rm -rf "$TEMP_DIR"
 
-          mkdir -p \
-            "$SDK_DIR/cmdline-tools"
-
-          mkdir -p \
-            "$SDK_DIR/licenses"
-
-          mkdir -p \
-            "$TEMP_DIR"
-
-
-          # --------------------------------------------------------
-          # Download Android Command Line Tools
-          # --------------------------------------------------------
+          mkdir -p "$SDK_DIR/cmdline-tools"
+          mkdir -p "$SDK_DIR/licenses"
+          mkdir -p "$TEMP_DIR"
 
           wget -q \
             https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip \
             -O "$ZIP_FILE"
 
-
-          # --------------------------------------------------------
-          # Extract
-          # --------------------------------------------------------
-
           unzip -q \
             "$ZIP_FILE" \
             -d "$TEMP_DIR"
-
-
-          # --------------------------------------------------------
-          # Correct modern SDK layout
-          #
-          # android-sdk/
-          #   cmdline-tools/
-          #     latest/
-          #       bin/
-          #       lib/
-          #       source.properties
-          # --------------------------------------------------------
 
           mv \
             "$TEMP_DIR/cmdline-tools" \
             "$SDK_DIR/cmdline-tools/latest"
 
-
-          # --------------------------------------------------------
-          # Buildozer 1.5 compatibility layout
-          #
-          # Buildozer may expect:
-          # android-sdk/tools/bin/sdkmanager
-          # --------------------------------------------------------
-
-          mkdir -p \
-            "$SDK_DIR/tools"
+          mkdir -p "$SDK_DIR/tools"
 
           ln -s \
             "$SDK_DIR/cmdline-tools/latest/bin" \
@@ -267,11 +216,6 @@ jobs:
             "$SDK_DIR/cmdline-tools/latest/source.properties" \
             "$SDK_DIR/tools/source.properties"
 
-
-          # --------------------------------------------------------
-          # Android licenses
-          # --------------------------------------------------------
-
           echo \
             "8933bad161af4178b1185d1a37fbf41ea5269c55" \
             > "$SDK_DIR/licenses/android-sdk-license"
@@ -284,32 +228,16 @@ jobs:
             "24333f8a63b6825ea9c5514f83c2829b004d1fee" \
             > "$SDK_DIR/licenses/android-sdk-preview-license"
 
-
-          # --------------------------------------------------------
-          # Verify sdkmanager
-          #
-          # IMPORTANT:
-          # Call the REAL modern sdkmanager and explicitly provide
-          # --sdk_root.
-          # --------------------------------------------------------
-
           echo "================================"
           echo "SDKMANAGER CHECK"
           echo "================================"
 
           test -x "$SDKMANAGER"
-
-          test -x \
-            "$SDK_DIR/tools/bin/sdkmanager"
+          test -x "$SDK_DIR/tools/bin/sdkmanager"
 
           "$SDKMANAGER" \
             --sdk_root="$SDK_DIR" \
             --version
-
-
-          # --------------------------------------------------------
-          # Accept licenses
-          # --------------------------------------------------------
 
           yes | \
             "$SDKMANAGER" \
@@ -317,25 +245,11 @@ jobs:
             --licenses \
             >/dev/null || true
 
-
-          # --------------------------------------------------------
-          # Install Android packages
-          # --------------------------------------------------------
-
           "$SDKMANAGER" \
             --sdk_root="$SDK_DIR" \
             "platform-tools" \
             "platforms;android-35" \
             "build-tools;35.0.0"
-
-
-          # --------------------------------------------------------
-          # Verify packages
-          # --------------------------------------------------------
-
-          echo "================================"
-          echo "VERIFY ANDROID PACKAGES"
-          echo "================================"
 
           test -f \
             "$SDK_DIR/platforms/android-35/android.jar"
@@ -346,8 +260,7 @@ jobs:
           test -x \
             "$SDK_DIR/platform-tools/adb"
 
-          test -d \
-            "$SDK_DIR/licenses"
+          test -d "$SDK_DIR/licenses"
 
           echo "ANDROID SDK CHECK PASSED"
 
@@ -380,7 +293,6 @@ jobs:
           echo "================================"
 
           pwd
-
           ls -la
 
           echo "--------------------------------"
@@ -405,7 +317,34 @@ jobs:
 
 
       # ============================================================
-      # 10. FINAL ANDROID ENVIRONMENT CHECK
+      # 10. VERIFY SETUPTOOLS SOURCE
+      # ============================================================
+
+      - name: Verify setuptools source
+        run: |
+          echo "================================"
+          echo "VERIFY SETUPTOOLS SOURCE"
+          echo "================================"
+
+          echo "$URL_setuptools"
+
+          curl \
+            --fail \
+            --location \
+            --retry 5 \
+            --retry-delay 2 \
+            --retry-all-errors \
+            --connect-timeout 20 \
+            --output /tmp/setuptools-51.3.3.tar.gz \
+            "$URL_setuptools"
+
+          test -s /tmp/setuptools-51.3.3.tar.gz
+
+          echo "SETUPTOOLS SOURCE AVAILABLE"
+
+
+      # ============================================================
+      # 11. FINAL ANDROID ENVIRONMENT CHECK
       # ============================================================
 
       - name: Final Android environment check
@@ -413,7 +352,6 @@ jobs:
           set -euxo pipefail
 
           SDK_DIR="$HOME/.buildozer/android/platform/android-sdk"
-
           SDKMANAGER="$SDK_DIR/cmdline-tools/latest/bin/sdkmanager"
 
           echo "================================"
@@ -423,34 +361,19 @@ jobs:
           echo "SDK:"
           echo "$SDK_DIR"
 
-          echo "--------------------------------"
-
           test -d "$SDK_DIR"
-
           test -x "$SDKMANAGER"
-
-          test -x \
-            "$SDK_DIR/tools/bin/sdkmanager"
-
-          test -f \
-            "$SDK_DIR/platforms/android-35/android.jar"
-
-          test -x \
-            "$SDK_DIR/build-tools/35.0.0/aidl"
-
-          test -x \
-            "$SDK_DIR/platform-tools/adb"
+          test -x "$SDK_DIR/tools/bin/sdkmanager"
+          test -f "$SDK_DIR/platforms/android-35/android.jar"
+          test -x "$SDK_DIR/build-tools/35.0.0/aidl"
+          test -x "$SDK_DIR/platform-tools/adb"
 
           "$SDKMANAGER" \
             --sdk_root="$SDK_DIR" \
             --version
 
-          echo "--------------------------------"
-
           java -version
-
           python --version
-
           buildozer --version
 
           echo "================================"
@@ -459,7 +382,7 @@ jobs:
 
 
       # ============================================================
-      # 11. BUILD APK
+      # 12. BUILD APK
       # ============================================================
 
       - name: Build APK
@@ -474,7 +397,7 @@ jobs:
 
 
       # ============================================================
-      # 12. UPLOAD BUILD LOG
+      # 13. UPLOAD BUILD LOG
       # ============================================================
 
       - name: Upload build log
@@ -486,8 +409,9 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+
       # ============================================================
-      # 13. SEARCH FOR APK
+      # 14. SEARCH FOR APK
       # ============================================================
 
       - name: Search for APK
@@ -505,7 +429,7 @@ jobs:
 
 
       # ============================================================
-      # 14. VERIFY APK
+      # 15. VERIFY APK
       # ============================================================
 
       - name: Verify APK
@@ -534,7 +458,7 @@ jobs:
 
 
       # ============================================================
-      # 15. RENAME APK
+      # 16. RENAME APK
       # ============================================================
 
       - name: Rename APK
@@ -568,7 +492,7 @@ jobs:
 
 
       # ============================================================
-      # 16. UPLOAD APK
+      # 17. UPLOAD APK
       # ============================================================
 
       - name: Upload APK
