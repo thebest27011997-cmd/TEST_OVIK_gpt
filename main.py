@@ -1992,12 +1992,65 @@ class ResultDetails(Screen):
                     )
                 ).strip()
 
-                source_name = str(
+                answer_description = str(
                     item.get(
-                        "source_name",
+                        "answer_description",
                         "",
                     )
                 ).strip()
+
+                # Поддержка результатов, которые были сохранены
+                # до появления поля answer_description.
+                # Для старых записей пытаемся найти исходный
+                # вопрос в текущем банке и получить его source.
+                if (
+                    not answer_description
+                    and question_text
+                ):
+                    saved_source_id = str(
+                        item.get(
+                            "source_id",
+                            "",
+                        )
+                    ).strip()
+
+                    for bank_question in app.pool:
+                        bank_question_text = str(
+                            bank_question.get(
+                                "text",
+                                "",
+                            )
+                        ).strip()
+
+                        if (
+                            bank_question_text
+                            !=
+                            question_text
+                        ):
+                            continue
+
+                        if saved_source_id:
+                            bank_source_id = (
+                                get_question_source_id(
+                                    bank_question,
+                                    app.bank_name,
+                                )
+                            )
+
+                            if (
+                                bank_source_id
+                                !=
+                                saved_source_id
+                            ):
+                                continue
+
+                        answer_description = (
+                            app._description_for_result(
+                                bank_question
+                            )
+                        )
+
+                        break
 
                 user_answer = str(
                     item.get(
@@ -2079,12 +2132,12 @@ class ResultDetails(Screen):
                     )
                 )
 
-                if source_name:
+                if answer_description:
                     card.add_widget(
                         _history_label(
                             (
-                                "Источник: "
-                                + source_name
+                                "Описание ответа:\n"
+                                + answer_description
                             ),
                             "12sp",
                             color=(
@@ -3015,6 +3068,57 @@ class TechProfiApp(App):
             question
         )
 
+    @staticmethod
+    def _description_for_result(
+        question,
+    ):
+        """
+        Возвращает описание ответа из поля source.
+
+        Полное название нормативного документа
+        автоматически не подставляется.
+
+        Если source является словарём, используются
+        поля section и text.
+        """
+
+        source = question.get(
+            "source",
+            "",
+        )
+
+        if isinstance(source, dict):
+            section = str(
+                source.get(
+                    "section",
+                    "",
+                )
+            ).strip()
+
+            source_text = str(
+                source.get(
+                    "text",
+                    "",
+                )
+            ).strip()
+
+            parts = [
+                part
+                for part in (
+                    section,
+                    source_text,
+                )
+                if part
+            ]
+
+            return "\n\n".join(
+                parts
+            )
+
+        return str(
+            source or ""
+        ).strip()
+
     def save_control_result(
         self,
         user,
@@ -3104,6 +3208,11 @@ class TechProfiApp(App):
 
                 "correct_answer":
                     self._correct_for_result(
+                        question
+                    ),
+
+                "answer_description":
+                    self._description_for_result(
                         question
                     ),
 
